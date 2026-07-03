@@ -87,6 +87,12 @@ try {
   const badp = await call('get_post', { subreddit: 'selfhosted', postId: 'zzzzzz' });
   check('bad postId -> isError', isErr(badp), raw(badp).slice(0, 70));
 
+  // 8. typed error kind on a down/bad path
+  const badKind = await call('get_subreddit_posts', { subreddit: 'zzz_nonexistent_sub_99999x' });
+  const bk = JSON.parse(raw(badKind));
+  check('bad subreddit -> typed kind present', isErr(badKind) && typeof bk.kind === 'string', bk.kind);
+  check('kind is a known enum', ['RATE_LIMITED','UPSTREAM_TOKEN_STALE','REDLIB_DOWN','CONTENT_UNAVAILABLE','PARSE_ERROR'].includes(bk.kind), bk.kind);
+
   console.log(`\n${fail === 0 ? 'ALL PASS' : fail + ' FAILED'}  (${pass} passed)`);
   process.exitCode = fail ? 1 : 0;
 } catch (e) {
