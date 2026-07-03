@@ -6,9 +6,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import fetch from "node-fetch";
 import { RedlibError, classifyRedlib, assertRedlibContent } from "./errors.js";
+import { resolveRedlibUrl } from "./config.js";
 
 // Configuration
-const REDLIB_BASE_URL = process.env.REDLIB_URL || "http://localhost:8080";
+const REDLIB_BASE_URL = resolveRedlibUrl();
 const USE_HTTP = process.env.USE_HTTP === "true";
 const HTTP_TOKEN = process.env.REDLIB_MCP_TOKEN || ""; // required bearer for USE_HTTP mode
 const COMMENT_BODY_CAP = 1200;
