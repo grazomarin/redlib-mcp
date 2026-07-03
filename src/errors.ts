@@ -46,3 +46,12 @@ export function classifyRedlib(status: number, bodyText: string): RedlibErrorKin
   }
   return "PARSE_ERROR";
 }
+
+// A valid Redlib content page (search/subreddit/user/post) renders <div id="column_one">;
+// error() and info() pages render <div id="error"> and NEVER #column_one. Verified against
+// Redlib templates (error.html, info.html, search.html, user.html, post.html). This guards the
+// silent-empty case: a 200 info/drift page must be PARSE_ERROR, not "ok_no_results".
+export function assertRedlibContent(html: string): void {
+  if (html.includes('id="error"')) throw new RedlibError("PARSE_ERROR", "Redlib returned an error/info page (HTTP 200), not content");
+  if (!html.includes('id="column_one"')) throw new RedlibError("PARSE_ERROR", "Redlib 200 response missing content shell (#column_one) — likely drift or a non-content page");
+}

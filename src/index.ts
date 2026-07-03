@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import fetch from "node-fetch";
-import { RedlibError, classifyRedlib } from "./errors.js";
+import { RedlibError, classifyRedlib, assertRedlibContent } from "./errors.js";
 
 // Configuration
 const REDLIB_BASE_URL = process.env.REDLIB_URL || "http://localhost:8080";
@@ -247,6 +247,7 @@ server.tool(
       if (limit) params.set("limit", String(limit));
       const path = subreddit ? `/r/${enc(subreddit)}/search?${params}` : `/search?${params}`;
       const html = await fetchRedlib(path);
+      assertRedlibContent(html);
       const posts = parsePostList(html);
       return compact({ query, resultCount: posts.length, status: posts.length ? "ok" : "ok_no_results", posts });
     } catch (e: any) { return fail(`Error searching Reddit: ${e?.message || e}`, e instanceof RedlibError ? e.kind : "PARSE_ERROR"); }
@@ -272,6 +273,7 @@ server.tool(
       if (after) params.set("after", after);
       const qs = params.toString();
       const html = await fetchRedlib(`/r/${enc(subreddit)}/${sort || "hot"}${qs ? `?${qs}` : ""}`);
+      assertRedlibContent(html);
       const posts = parsePostList(html);
       const out: Record<string, unknown> = { subreddit, sort: sort || "hot", resultCount: posts.length, status: posts.length ? "ok" : "ok_no_results", posts };
       const cursor = nextAfter(html);
@@ -309,6 +311,7 @@ server.tool(
         ? `/r/${enc(sub)}/comments/${enc(pid)}/_/${enc(comment_id)}${qs ? `?${qs}` : ""}`
         : `/r/${enc(sub)}/comments/${enc(pid)}${qs ? `?${qs}` : ""}`;
       const html = await fetchRedlib(path);
+      assertRedlibContent(html);
       const data = parsePostDetails(html, max_comments ?? 50) as any;
       if (!data.title && !data.body && data.comments_in_page === 0) {
         return fail(`Post ${sub}/${pid} came back empty — likely a wrong/removed postId or a Redlib hiccup.`);
@@ -334,6 +337,7 @@ server.tool(
       if (after) params.set("after", after);
       const qs = params.toString();
       const html = await fetchRedlib(`/user/${enc(username)}${qs ? `?${qs}` : ""}`);
+      assertRedlibContent(html);
       const posts = parsePostList(html);
       const out: Record<string, unknown> = { username, resultCount: posts.length, status: posts.length ? "ok" : "ok_no_results", posts };
       const cursor = nextAfter(html);
