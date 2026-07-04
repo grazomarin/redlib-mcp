@@ -12,7 +12,8 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "prepublishOnly": "npm run build"
+    "check:framing": "node scripts/check-forbidden-words.mjs",
+    "prepublishOnly": "npm run build && npm run check:framing"
   },
   "keywords": [
     "mcp",
