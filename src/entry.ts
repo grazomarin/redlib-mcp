@@ -24,5 +24,6 @@ async function main() {
     "  redlib-mcp setup             install/repair the Redlib backend (Plan 2)\n" +
     "  redlib-mcp update|doctor     manage/diagnose the backend (Plan 2)\n"
   );
+  if (cmd) process.exitCode = 2; // a command was given but unrecognized; bare help stays exit 0
 }
 main().catch((e) => { console.error("Fatal:", e); process.exit(1); });

@@ -1,3 +1,5 @@
+import * as cheerio from "cheerio";
+
 export type RedlibErrorKind =
   | "RATE_LIMITED"
   | "UPSTREAM_TOKEN_STALE"
@@ -52,6 +54,7 @@ export function classifyRedlib(status: number, bodyText: string): RedlibErrorKin
 // Redlib templates (error.html, info.html, search.html, user.html, post.html). This guards the
 // silent-empty case: a 200 info/drift page must be PARSE_ERROR, not "ok_no_results".
 export function assertRedlibContent(html: string): void {
-  if (html.includes('id="error"')) throw new RedlibError("PARSE_ERROR", "Redlib returned an error/info page (HTTP 200), not content");
-  if (!html.includes('id="column_one"')) throw new RedlibError("PARSE_ERROR", "Redlib 200 response missing content shell (#column_one) — likely drift or a non-content page");
+  const $ = cheerio.load(html);
+  if ($('#error').length > 0) throw new RedlibError("PARSE_ERROR", "Redlib returned an error/info page (HTTP 200), not content");
+  if ($('#column_one').length === 0) throw new RedlibError("PARSE_ERROR", "Redlib 200 response missing content shell (#column_one) — likely drift or a non-content page");
 }

@@ -14,7 +14,8 @@ const REDLIB_BASE_URL = resolveRedlibUrl();
 const USE_HTTP = process.env.USE_HTTP === "true";
 const HTTP_TOKEN = process.env.REDLIB_MCP_TOKEN || ""; // required bearer for USE_HTTP mode
 const COMMENT_BODY_CAP = 1200;
-const REDLIB_MIN_INTERVAL_MS = parseInt(process.env.REDLIB_MIN_INTERVAL_MS || "300", 10); // gentle default
+const _minInterval = parseInt(process.env.REDLIB_MIN_INTERVAL_MS || "300", 10); // gentle default
+const REDLIB_MIN_INTERVAL_MS = Number.isFinite(_minInterval) && _minInterval >= 0 ? _minInterval : 300;
 const limiter = new MinIntervalLimiter(REDLIB_MIN_INTERVAL_MS);
 const backend = new RedlibBackend(REDLIB_BASE_URL, () => limiter.acquire());
 

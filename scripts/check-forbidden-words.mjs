@@ -8,7 +8,7 @@ const FORBIDDEN = [
   /scrape at scale/i, /\bharvest\b/i, /\bdataset\b/i,
 ];
 const files = process.argv.slice(2);
-const targets = files.length ? files : ['README.md', 'package.json', 'skills/setup-redlib/SKILL.md'];
+const targets = files.length ? files : ['README.md', 'package.json', 'skills/setup-redlib/SKILL.md', 'src/index.ts'];
 
 let hits = 0;
 for (const f of targets) {
