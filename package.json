@@ -1,13 +1,14 @@
 {
   "name": "redlib-mcp",
   "version": "1.0.0",
-  "description": "MCP server for interacting with Redlib (private Reddit front-end)",
+  "description": "A private, self-hosted window into public Reddit for your AI agent — no account, no API key, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.",
+  "mcpName": "io.github.grazomarin/redlib-mcp",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "redlib-mcp": "dist/entry.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "skills", "server.json", "linux", "NOTICE", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
@@ -23,16 +24,19 @@
     "llm",
     "modelcontextprotocol"
   ],
-  "author": "Devthatdoes",
+  "author": "Kamran Huseynov (grazomarin)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Devthatdoes/redlib-mcp-server.git"
+    "url": "https://github.com/grazomarin/redlib-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/Devthatdoes/redlib-mcp-server/issues"
+    "url": "https://github.com/grazomarin/redlib-mcp/issues"
   },
-  "homepage": "https://github.com/Devthatdoes/redlib-mcp-server#readme",
+  "homepage": "https://github.com/grazomarin/redlib-mcp#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "cheerio": "^1.2.0",
