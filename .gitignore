@@ -37,3 +37,5 @@ Thumbs.db
 docs/superpowers/
 # SDD progress ledger (scratch)
 .superpowers/
+# Local-only working notes
+PUBLISHING.md

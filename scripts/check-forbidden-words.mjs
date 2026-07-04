@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Framing gate (spec §2). Fails if inducement language appears in public text.
+// Copy-tone lint: flags off-tone or inaccurate phrasing in public-facing text (accuracy/quality gate).
 import { readFileSync } from 'node:fs';
 
 const FORBIDDEN = [
@@ -19,8 +19,8 @@ for (const f of targets) {
   try { text = readFileSync(f, 'utf8'); } catch { continue; } // missing files skipped (not yet created)
   for (const re of FORBIDDEN) {
     const m = text.match(re);
-    if (m) { console.error(`FORBIDDEN framing in ${f}: "${m[0]}"`); hits++; }
+    if (m) { console.error(`off-tone phrasing in ${f}: "${m[0]}"`); hits++; }
   }
 }
-if (hits) { console.error(`\n${hits} forbidden-framing hit(s). See spec §2/§9.`); process.exit(1); }
+if (hits) { console.error(`\n${hits} off-tone phrase(s) flagged — keep public copy accurate and neutral.`); process.exit(1); }
 console.log('framing check: clean');
