@@ -4,10 +4,10 @@ import * as cheerio from 'cheerio';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import fetch from "node-fetch";
-import { RedlibError, classifyRedlib, assertRedlibContent } from "./errors.js";
+import { RedlibError, assertRedlibContent } from "./errors.js";
 import { resolveRedlibUrl } from "./config.js";
 import { MinIntervalLimiter } from "./limiter.js";
+import { RedlibBackend } from "./backend/redlib.js";
 
 // Configuration
 const REDLIB_BASE_URL = resolveRedlibUrl();
@@ -16,47 +16,9 @@ const HTTP_TOKEN = process.env.REDLIB_MCP_TOKEN || ""; // required bearer for US
 const COMMENT_BODY_CAP = 1200;
 const REDLIB_MIN_INTERVAL_MS = parseInt(process.env.REDLIB_MIN_INTERVAL_MS || "300", 10); // gentle default
 const limiter = new MinIntervalLimiter(REDLIB_MIN_INTERVAL_MS);
+const backend = new RedlibBackend(REDLIB_BASE_URL, () => limiter.acquire());
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const enc = encodeURIComponent;
-
-// Resilient fetch: timeout + bounded retry on timeout/429/5xx, HTTP-status check,
-// and a content-type guard so a non-HTML block/error page never reaches cheerio.
-// Throws a descriptive Error on 4xx / non-HTML / final failure.
-async function fetchRedlib(path: string, timeoutMs = 15000): Promise<string> {
-  await limiter.acquire();
-  const url = `${REDLIB_BASE_URL}${path}`;
-  let lastErr: any;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { signal: ctrl.signal as any });
-      clearTimeout(timer);
-      if (res.ok) {
-        const ct = res.headers.get("content-type") || "";
-        if (!ct.includes("html")) throw new RedlibError("PARSE_ERROR", `Redlib returned non-HTML content-type "${ct}" for ${url} — is REDLIB_URL a Redlib instance?`);
-        return await res.text();
-      }
-      const body = await res.text().catch(() => "");
-      const kind = classifyRedlib(res.status, body) ?? "PARSE_ERROR";
-      const err = new RedlibError(kind, `Redlib HTTP ${res.status} (${kind}) for ${url}`, res.status);
-      if (err.retryable && attempt < 2) { lastErr = err; await sleep(400 * (attempt + 1)); continue; }
-      throw err;
-    } catch (e: any) {
-      clearTimeout(timer);
-      if (e instanceof RedlibError) throw e;
-      if (e?.name === "AbortError") {
-        lastErr = new RedlibError("REDLIB_DOWN", `Redlib request timed out after ${timeoutMs}ms for ${url}.`);
-        if (attempt < 2) { await sleep(400 * (attempt + 1)); continue; }
-        throw lastErr;
-      }
-      if (e?.code === "ECONNREFUSED" || e?.code === "ECONNRESET") throw new RedlibError("REDLIB_DOWN", `Redlib not reachable at ${url} (${e.code}) — is the container running?`);
-      throw new RedlibError("PARSE_ERROR", `Redlib request failed for ${url}: ${e?.message || e}`);
-    }
-  }
-  throw lastErr || new RedlibError("PARSE_ERROR", `Redlib request failed for ${url}`);
-}
 
 function exactScore($el: cheerio.Cheerio<any>): number | null {
   const title = ($el.attr("title") || "").trim();
@@ -251,7 +213,7 @@ server.tool(
       if (time) params.set("t", time);
       if (limit) params.set("limit", String(limit));
       const path = subreddit ? `/r/${enc(subreddit)}/search?${params}` : `/search?${params}`;
-      const html = await fetchRedlib(path);
+      const html = await backend.fetch(path);
       assertRedlibContent(html);
       const posts = parsePostList(html);
       return compact({ query, resultCount: posts.length, status: posts.length ? "ok" : "ok_no_results", posts });
@@ -277,7 +239,7 @@ server.tool(
       if (limit) params.set("limit", String(limit));
       if (after) params.set("after", after);
       const qs = params.toString();
-      const html = await fetchRedlib(`/r/${enc(subreddit)}/${sort || "hot"}${qs ? `?${qs}` : ""}`);
+      const html = await backend.fetch(`/r/${enc(subreddit)}/${sort || "hot"}${qs ? `?${qs}` : ""}`);
       assertRedlibContent(html);
       const posts = parsePostList(html);
       const out: Record<string, unknown> = { subreddit, sort: sort || "hot", resultCount: posts.length, status: posts.length ? "ok" : "ok_no_results", posts };
@@ -315,7 +277,7 @@ server.tool(
       const path = comment_id
         ? `/r/${enc(sub)}/comments/${enc(pid)}/_/${enc(comment_id)}${qs ? `?${qs}` : ""}`
         : `/r/${enc(sub)}/comments/${enc(pid)}${qs ? `?${qs}` : ""}`;
-      const html = await fetchRedlib(path);
+      const html = await backend.fetch(path);
       assertRedlibContent(html);
       const data = parsePostDetails(html, max_comments ?? 50) as any;
       if (!data.title && !data.body && data.comments_in_page === 0) {
@@ -341,7 +303,7 @@ server.tool(
       if (sort) params.set("sort", sort);
       if (after) params.set("after", after);
       const qs = params.toString();
-      const html = await fetchRedlib(`/user/${enc(username)}${qs ? `?${qs}` : ""}`);
+      const html = await backend.fetch(`/user/${enc(username)}${qs ? `?${qs}` : ""}`);
       assertRedlibContent(html);
       const posts = parsePostList(html);
       const out: Record<string, unknown> = { username, resultCount: posts.length, status: posts.length ? "ok" : "ok_no_results", posts };
