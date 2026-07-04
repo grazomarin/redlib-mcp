@@ -127,3 +127,50 @@ export async function buildImage(dir: string, tag: string, engine: Engine, run: 
   );
   if (r.code !== 0) throw new Error(`Redlib image build failed (${engine.kind}). Last build output:\n${r.stderr.slice(-2000)}`);
 }
+
+export async function runContainer(
+  engine: Engine,
+  opts: { image: string; name: string; port: number; host?: string; restart?: boolean },
+  run: Runner = defaultRunner,
+): Promise<void> {
+  const host = opts.host ?? "127.0.0.1"; // loopback default (spec §6.4)
+  const args = ["run", "-d", "--name", opts.name, "-p", `${host}:${opts.port}:8080`];
+  if (opts.restart !== false) args.push("--restart", "unless-stopped");
+  args.push(opts.image);
+  await ok(await run(engine.bin, args), `start container ${opts.name}`);
+}
+
+export async function stopContainer(engine: Engine, name: string, run: Runner = defaultRunner): Promise<void> {
+  await run(engine.bin, ["rm", "-f", name]); // best-effort; absent container is fine
+}
+
+// The container id publishing `port` on the host, or null. Used to detect "already running on :8080".
+export async function containerIdOnPort(engine: Engine, port: number, run: Runner = defaultRunner): Promise<string | null> {
+  const r = await run(engine.bin, ["ps", "--filter", `publish=${port}`, "--format", "{{.ID}}"]);
+  const id = r.stdout.trim().split(/\s+/).filter(Boolean)[0];
+  return id || null;
+}
+
+export async function tagImage(engine: Engine, from: string, to: string, run: Runner = defaultRunner): Promise<void> {
+  await ok(await run(engine.bin, ["tag", from, to]), `tag ${from} -> ${to}`);
+}
+
+export async function removeImage(engine: Engine, tag: string, run: Runner = defaultRunner): Promise<void> {
+  await run(engine.bin, ["rmi", "-f", tag]); // best-effort cleanup
+}
+
+// Poll a Redlib URL until it answers 200, or give up. Distinct from the build timeout (spec §8).
+// fetchFn injectable for tests; defaults to global fetch (Node ≥18).
+export async function waitHealthy(
+  url: string,
+  opts: { tries?: number; delayMs?: number; fetchFn?: (u: string) => Promise<{ ok: boolean }> } = {},
+): Promise<boolean> {
+  const tries = opts.tries ?? 60;
+  const delayMs = opts.delayMs ?? 1000;
+  const fetchFn = opts.fetchFn ?? ((u: string) => fetch(u) as unknown as Promise<{ ok: boolean }>);
+  for (let i = 0; i < tries; i++) {
+    try { if ((await fetchFn(`${url}/settings`)).ok) return true; } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
+}
