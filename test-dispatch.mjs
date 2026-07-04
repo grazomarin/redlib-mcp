@@ -29,5 +29,6 @@ assert.ok(server.out.length > 0, 'serve must emit a JSON-RPC response to initial
 assert.equal(server.out[0], '{', `first stdout byte must be '{' (got ${JSON.stringify(server.out.slice(0, 40))})`);
 
 const doctor = await runCmd(['doctor']);
-assert.ok(/not yet|plan 2|coming/i.test(doctor.out + doctor.err), 'doctor stub should announce it is not yet implemented');
+// doctor now runs for real; with no engine/daemon in CI it still prints a diagnostic and exits non-zero.
+assert.ok(/engine|container|docker|daemon/i.test(doctor.out + doctor.err), 'doctor should print a real diagnostic line');
 console.log('ALL PASS');

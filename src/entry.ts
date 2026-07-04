@@ -12,9 +12,8 @@ async function main() {
     return;
   }
   if (cmd && CLI_COMMANDS.has(cmd)) {
-    // Plan 2 replaces this with the real CLI. All diagnostics on stderr.
-    console.error(`redlib-mcp ${cmd}: CLI not yet implemented (arrives in Plan 2).`);
-    process.exitCode = 2;
+    const { run } = await import("./cli.js");
+    process.exitCode = await run(argv);
     return;
   }
   // help (bare TTY or unknown command) — stderr, so stdout stays clean for pipes.
