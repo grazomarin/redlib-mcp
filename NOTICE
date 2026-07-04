@@ -1,0 +1,25 @@
+redlib-mcp
+==========
+
+This wrapper (the MCP server, CLI, and setup skill) is licensed MIT — see LICENSE.
+It is derived from devthatdoes/redlib-mcp-server (MIT):
+  https://github.com/Devthatdoes/redlib-mcp-server
+
+Third-party program: Redlib
+---------------------------
+Redlib (https://github.com/redlib-org/redlib) is a SEPARATE program licensed
+under the GNU AGPL-3.0. redlib-mcp does NOT bundle, vendor, or distribute Redlib.
+The `redlib-mcp setup`/`update` CLI clones Redlib from its upstream repository at a
+pinned reviewed commit and builds it FROM SOURCE on your own machine. Redlib remains
+under, and your use of it is governed by, its own AGPL-3.0 license.
+
+Trademark
+---------
+Not affiliated with or endorsed by Reddit, Inc. "Reddit" is used only as a
+descriptor of the public content this tool reads via your self-hosted Redlib.
+
+Your responsibility
+-------------------
+You run and control the Redlib backend on your own machine and are responsible
+for your use of it and for complying with the terms of the services you access.
+This project hosts no instance and ships no credentials.
