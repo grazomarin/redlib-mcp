@@ -1,6 +1,6 @@
 ---
 name: setup-redlib
-description: A private, self-hosted window into public Reddit for your AI agent — no account, no API key, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.
+description: A private, self-hosted window into public Reddit for your AI agent — no login, no tracking, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.
 ---
 
 # Set up redlib-mcp

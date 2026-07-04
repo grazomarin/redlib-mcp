@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.grazomarin/redlib-mcp",
   "title": "redlib-mcp",
-  "description": "A private, self-hosted window into public Reddit for your AI agent — no account, no API key, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.",
+  "description": "A private, self-hosted window into public Reddit for your AI agent — no login, no tracking, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI. Not affiliated with or endorsed by Reddit, Inc.",
   "version": "1.0.0",
   "repository": {
     "url": "https://github.com/grazomarin/redlib-mcp",

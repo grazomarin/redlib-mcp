@@ -1,6 +1,6 @@
 # redlib-mcp
 
-A private, self-hosted window into public Reddit for your AI agent — no account, no API key, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.
+A private, self-hosted window into public Reddit for your AI agent — no login, no tracking, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.
 
 `redlib-mcp` is a Model Context Protocol (MCP) server that lets an AI agent read public Reddit content through a self-hosted [Redlib](https://github.com/redlib-org/redlib) instance that you run and control. It ships three parts that work together:
 
@@ -36,7 +36,7 @@ npx -y redlib-mcp@1.0.0 setup
 | --- | --- | --- |
 | `REDLIB_URL` | `http://127.0.0.1:8080` | Your Redlib instance. Use `127.0.0.1`, not `localhost` (a dual-stack host may resolve `localhost` to `::1` and miss the loopback-only bind). |
 
-The MCP talks only to your own loopback Redlib and never contacts reddit.com directly; it applies a conservative request rate cap. (A `robots.txt` respecter is not applicable to a self-hosted loopback backend you control.)
+The MCP talks only to your own loopback Redlib and never contacts reddit.com directly; it applies a conservative request rate cap.
 
 ## Platform support
 

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const s = readFileSync('skills/setup-redlib/SKILL.md', 'utf8');
-const HOOK = 'A private, self-hosted window into public Reddit for your AI agent — no account, no API key, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.';
+const HOOK = 'A private, self-hosted window into public Reddit for your AI agent — no login, no tracking, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.';
 
 // frontmatter: name + description (description = the master hook)
 const fm = s.match(/^---\n([\s\S]*?)\n---/);

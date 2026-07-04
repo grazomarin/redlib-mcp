@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const md = readFileSync('README.md', 'utf8');
-const HOOK = 'A private, self-hosted window into public Reddit for your AI agent — no account, no API key, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.';
+const HOOK = 'A private, self-hosted window into public Reddit for your AI agent — no login, no tracking, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.';
 
 assert.ok(md.includes(HOOK), 'README must contain the exact master hook');
 assert.ok(/not affiliated with (or endorsed by )?Reddit, Inc\./i.test(md), 'must carry the Reddit trademark disclaimer');

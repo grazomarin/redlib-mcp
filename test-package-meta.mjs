@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-const HOOK = 'A private, self-hosted window into public Reddit for your AI agent — no account, no API key, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.';
+const HOOK = 'A private, self-hosted window into public Reddit for your AI agent — no login, no tracking, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI.';
 
 assert.equal(pkg.name, 'redlib-mcp', 'name is the renamed package (Plan 1)');
 assert.equal(pkg.description, HOOK, 'npm description IS the master hook (verbatim)');
