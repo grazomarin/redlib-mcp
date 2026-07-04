@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, rmSync, statSync } from "node:fs";
 import { arch as osArch } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { REDLIB_PIN } from "./pin.js";
 
 export type RunResult = { stdout: string; stderr: string; code: number };
@@ -173,4 +173,29 @@ export async function waitHealthy(
     await new Promise((r) => setTimeout(r, delayMs));
   }
   return false;
+}
+
+// Cross-platform build lock (spec §8): create a sentinel with O_EXCL ("wx"); if it already exists
+// and is fresh, another build is running -> refuse (do not stack a second multi-minute Rust
+// compile). A lock older than staleMs is assumed crashed and reclaimed. Always released in finally.
+// ponytail: an O_EXCL sentinel is enough for one-machine single-user serialization; no lock daemon.
+export async function withBuildLock<T>(lockPath: string, fn: () => Promise<T>, opts: { staleMs?: number } = {}): Promise<T> {
+  const staleMs = opts.staleMs ?? 30 * 60 * 1000; // > worst-case build
+  mkdirSync(dirname(lockPath), { recursive: true });
+  const acquire = (): number => {
+    try { return openSync(lockPath, "wx"); }
+    catch (e: any) {
+      if (e?.code !== "EEXIST") throw e;
+      // mtimeMs is a sub-ms float while Date.now() is integer ms, so a just-written lock can read
+      // as a tiny negative age; clamp to 0 so staleMs:0 correctly reclaims any existing lock.
+      const age = Math.max(0, Date.now() - statSync(lockPath).mtimeMs);
+      if (age < staleMs) throw new Error(`A Redlib build is already in progress (lock: ${lockPath}). Wait for it to finish, or delete the lock if it is stale.`);
+      rmSync(lockPath, { force: true });               // reclaim a crashed build's stale lock
+      return openSync(lockPath, "wx");
+    }
+  };
+  const fd = acquire();
+  closeSync(fd);
+  try { return await fn(); }
+  finally { rmSync(lockPath, { force: true }); }
 }
