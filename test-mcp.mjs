@@ -2,8 +2,8 @@
 // handshake over stdio, exercises every tool + the failure path.
 import { spawn } from 'node:child_process';
 
-const child = spawn('node', ['dist/index.js'], {
-  env: { ...process.env, REDLIB_URL: 'http://localhost:8080' },
+const child = spawn('node', ['dist/entry.js', 'serve'], {
+  env: { ...process.env, REDLIB_URL: 'http://127.0.0.1:8080' },
   stdio: ['pipe', 'pipe', 'inherit'],
 });
 
