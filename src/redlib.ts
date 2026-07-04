@@ -1,5 +1,8 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { arch as osArch } from "node:os";
+import { join } from "node:path";
+import { REDLIB_PIN } from "./pin.js";
 
 export type RunResult = { stdout: string; stderr: string; code: number };
 export type Runner = (
@@ -74,4 +77,53 @@ export async function detectEngine(
 export async function daemonReachable(engine: Engine, run: Runner = defaultRunner): Promise<boolean> {
   const r = await run(engine.bin, ["version", "--format", "{{.Server.Version}}"]).catch(() => ({ stdout: "", stderr: "", code: 1 }));
   return r.code === 0 && r.stdout.trim().length > 0;
+}
+
+async function ok(r: RunResult, label: string): Promise<RunResult> {
+  if (r.code !== 0) throw new Error(`${label} failed (exit ${r.code}): ${(r.stderr || r.stdout).slice(-600)}`);
+  return r;
+}
+
+// Clone/fetch Redlib at the IMMUTABLE pinned SHA and detach onto it. We fetch the exact commit
+// (GitHub serves reachable SHAs); if the server refuses a bare-SHA want, fall back to fetching the
+// branch, then check the SHA out of its history. Finally assert HEAD == pin — a redirected or
+// force-moved remote can't slip an unpinned tree past this (spec §6.1).
+export async function cloneAtPin(dir: string, run: Runner = defaultRunner, pin = REDLIB_PIN): Promise<void> {
+  mkdirSync(dir, { recursive: true });
+  const git = (args: string[], opts?: { timeoutMs?: number }) => run("git", ["-C", dir, ...args], opts);
+  if (!existsSync(join(dir, ".git"))) {
+    await ok(await run("git", ["init", "-q", dir]), "git init");
+    await ok(await git(["remote", "add", "origin", pin.repo]), "git remote add");
+  }
+  const byShaFetch = await git(["fetch", "--depth", "1", "origin", pin.sha]);
+  if (byShaFetch.code !== 0) {
+    await ok(await git(["fetch", "origin", pin.ref]), "git fetch (fallback by ref)");
+  }
+  await ok(await git(["checkout", "-q", "--detach", pin.sha]), "git checkout pinned SHA");
+  const head = (await ok(await git(["rev-parse", "HEAD"]), "git rev-parse")).stdout.trim();
+  if (head !== pin.sha) throw new Error(`Redlib clone HEAD ${head} != pinned ${pin.sha} — refusing to build an unpinned tree`);
+}
+
+// Node's arch names -> OCI arch names, for the doctor arch-match check (spec §6.2).
+export function hostArch(a: string = osArch()): string {
+  if (a === "x64") return "amd64";
+  if (a === "arm64") return "arm64";
+  return a;
+}
+
+// The arch the built image actually targets (spec §6.2: warn/abort on an emulated mismatch).
+export async function imageArch(engine: Engine, tag: string, run: Runner = defaultRunner): Promise<string> {
+  const r = await run(engine.bin, ["image", "inspect", tag, "--format", "{{.Architecture}}"]);
+  return r.code === 0 ? r.stdout.trim() : "";
+}
+
+// Build Redlib FROM SOURCE with Dockerfile.ubuntu ONLY (spec §6.2). Generous first-build timeout
+// (Rust compile) distinct from the runtime health timeout (spec §8). Streams progress live.
+export async function buildImage(dir: string, tag: string, engine: Engine, run: Runner = defaultRunner): Promise<void> {
+  const r = await run(
+    engine.bin,
+    ["build", "-f", "Dockerfile.ubuntu", "-t", tag, dir],
+    { timeoutMs: 1_200_000, stream: true }, // 20 min; matches the reference quadlet TimeoutStartSec
+  );
+  if (r.code !== 0) throw new Error(`Redlib image build failed (${engine.kind}). Last build output:\n${r.stderr.slice(-2000)}`);
 }
