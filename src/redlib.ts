@@ -117,10 +117,13 @@ export async function imageArch(engine: Engine, tag: string, run: Runner = defau
 
 // Build Redlib FROM SOURCE with Dockerfile.ubuntu ONLY (spec §6.2). Generous first-build timeout
 // (Rust compile) distinct from the runtime health timeout (spec §8). Streams progress live.
+// `-f` must be the Dockerfile INSIDE the clone dir: BuildKit (docker-desktop's default builder)
+// resolves a `-f` path relative to the CLI's CWD, NOT the build context, so a bare "Dockerfile.ubuntu"
+// looks in the caller's CWD and fails with "no such file". Qualify it against `dir`.
 export async function buildImage(dir: string, tag: string, engine: Engine, run: Runner = defaultRunner): Promise<void> {
   const r = await run(
     engine.bin,
-    ["build", "-f", "Dockerfile.ubuntu", "-t", tag, dir],
+    ["build", "-f", join(dir, "Dockerfile.ubuntu"), "-t", tag, dir],
     { timeoutMs: 1_200_000, stream: true }, // 20 min; matches the reference quadlet TimeoutStartSec
   );
   if (r.code !== 0) throw new Error(`Redlib image build failed (${engine.kind}). Last build output:\n${r.stderr.slice(-2000)}`);

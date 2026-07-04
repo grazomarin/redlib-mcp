@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import { join } from 'node:path';
 import { cloneAtPin, buildImage, hostArch } from './dist/redlib.js';
 import { REDLIB_PIN } from './dist/pin.js';
 
@@ -35,8 +36,12 @@ function recorder(results = {}) {
   await buildImage('/tmp/redlib-src', 'localhost/redlib:building', { bin: 'docker', kind: 'docker' }, run);
   const build = calls.find(c => c.args[0] === 'build');
   assert.ok(build, 'must call build');
-  assert.ok(build.args.includes('-f') && build.args.includes('Dockerfile.ubuntu'), 'must use -f Dockerfile.ubuntu');
-  assert.ok(!build.args.some(a => a === 'Dockerfile' || a === 'Dockerfile.alpine'), 'never the default/alpine Dockerfile');
+  // -f must be the Dockerfile.ubuntu INSIDE the clone dir, not a bare relative name: BuildKit resolves
+  // -f relative to the CLI's CWD (not the context), so a bare "Dockerfile.ubuntu" fails for real users.
+  const fi = build.args.indexOf('-f');
+  assert.ok(fi >= 0 && build.args[fi + 1] === join('/tmp/redlib-src', 'Dockerfile.ubuntu'),
+    'must pass -f as the Dockerfile.ubuntu resolved against the clone dir, got: ' + build.args[fi + 1]);
+  assert.ok(!build.args.some(a => a === 'Dockerfile' || a === 'Dockerfile.alpine' || a.endsWith('/Dockerfile') || a.endsWith('/Dockerfile.alpine')), 'never the default/alpine Dockerfile');
   assert.ok(build.args.includes('-t') && build.args.includes('localhost/redlib:building'), 'must tag the temp image');
   assert.ok((build.opts?.timeoutMs ?? 0) >= 600000, 'first-build timeout must be generous (>=10min)');
 }
