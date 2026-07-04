@@ -140,7 +140,7 @@ export interface SetupDeps {
   cloneAtPin: (dir: string) => Promise<void>;
   buildImage: (dir: string, tag: string, e: Engine) => Promise<void>;
   containerIdOnPort: (e: Engine, port: number) => Promise<string | null>;
-  runContainer: (e: Engine, o: { image: string; name: string; port: number; host?: string }) => Promise<void>;
+  runContainer: (e: Engine, o: { image: string; name: string; port: number; host?: string; restart?: boolean }) => Promise<void>;
   tagImage: (e: Engine, from: string, to: string) => Promise<void>;
   removeImage: (e: Engine, tag: string) => Promise<void>;
   stopContainer: (e: Engine, name: string) => Promise<void>;
@@ -173,7 +173,8 @@ function withSetupDefaults(deps?: Partial<SetupDeps>): SetupDeps {
 
 export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promise<number> {
   const flags = parseFlags(argv);
-  const port = parseInt((flags.port as string) || String(DEFAULT_PORT), 10);
+  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
+  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
   const host = flags["non-loopback"] ? "0.0.0.0" : "127.0.0.1";
   const d = withSetupDefaults(deps);
 
@@ -206,7 +207,7 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
     const tmpPort = port + 1;
     const tmpName = `${CONTAINER_NAME}-candidate`;
     await d.stopContainer(engine, tmpName);
-    await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1" });
+    await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1", restart: false });
     const tmpUrl = `http://127.0.0.1:${tmpPort}`;
     const healthy = await d.waitHealthy(tmpUrl);
     const v = healthy ? await d.verifyCandidate(tmpUrl) : { decision: "defer", lastKind: "REDLIB_DOWN", detail: "candidate never healthy" };

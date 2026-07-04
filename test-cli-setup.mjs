@@ -58,20 +58,42 @@ import { parseFlags, serverEntry, cmdSetup } from './dist/cli.js';
   assert.ok(order.some(o => o.startsWith('run:') && o !== 'run:8080'), `must run candidate on a TEMP port, order: ${order}`);
   assert.ok(order.includes('promote'), 'a verified candidate is promoted');
 }
-// a discarded candidate (broken build) -> non-zero, live service untouched.
+// a discarded candidate (broken build) -> removeImage the candidate, exit 5, live service untouched.
 {
+  let removedBuilding = false;
   const deps = {
     detectEngine: async () => ({ bin: 'docker', kind: 'docker' }), daemonReachable: async () => true,
     cloneAtPin: async () => {}, buildImage: async () => {},
     containerIdOnPort: async () => 'existing123',
     runContainer: async () => {}, tagImage: async () => { throw new Error('must NOT promote a discard'); },
-    removeImage: async () => {}, stopContainer: async () => {}, waitHealthy: async () => true,
+    removeImage: async (_e, tag) => { removedBuilding = (removedBuilding || String(tag).includes('building')); }, stopContainer: async () => {}, waitHealthy: async () => true,
     verifyCandidate: async () => ({ decision: 'discard', lastKind: 'PARSE_ERROR', detail: 'broken' }),
     withBuildLock: async (fn) => fn(),
     resolveClientConfig: () => '/tmp/x/config.json', version: '1.0.0',
   };
   const code = await cmdSetup(['--yes', '--print-only'], deps);
-  assert.notEqual(code, 0, 'a broken build must fail setup');
+  assert.ok(removedBuilding, 'discard must removeImage the candidate (building) tag');
+  assert.equal(code, 5, 'discard returns 5');
+}
+// re-setup, verify DEFER (inconclusive) -> KEEP candidate image (not removed), never promote, non-zero.
+{
+  let removedBuilding = false, promoted = false;
+  const deps = {
+    detectEngine: async () => ({ bin: 'docker', kind: 'docker' }), daemonReachable: async () => true,
+    cloneAtPin: async () => {}, buildImage: async () => {},
+    containerIdOnPort: async () => 'existing123',
+    runContainer: async () => {}, stopContainer: async () => {},
+    tagImage: async () => { promoted = true; },
+    removeImage: async (_e, tag) => { if (String(tag).includes('building')) removedBuilding = true; },
+    waitHealthy: async () => true,
+    verifyCandidate: async () => ({ decision: 'defer', lastKind: 'RATE_LIMITED', detail: 'throttled' }),
+    withBuildLock: async (fn) => fn(),
+    resolveClientConfig: () => '', version: '1.0.0',
+  };
+  const code = await cmdSetup(['--yes', '--print-only'], deps);
+  assert.notEqual(code, 0, 'defer is a non-zero (inconclusive) exit');
+  assert.equal(removedBuilding, false, 'defer must KEEP the candidate image (must NOT removeImage the building tag)');
+  assert.equal(promoted, false, 'defer must not promote');
 }
 // config-WRITE branch (NO --print-only): merges into an existing config atomically, keeps siblings,
 // leaves a .bak. This exercises the Task-8 headline deliverable end-to-end (the --print-only tests
