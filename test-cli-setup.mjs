@@ -38,6 +38,27 @@ import { parseFlags, serverEntry, cmdSetup } from './dist/cli.js';
   assert.equal(code, 0, `clean setup should succeed, got ${code}`);
   assert.deepEqual(order, ['engine', 'clone', 'build', 'run', 'verify'], `clean path order: ${order}`);
 }
+// clean install must clear any stale/stopped same-name container before the direct bind (no name-conflict crash).
+{
+  const calls = [];
+  const deps = {
+    detectEngine: async () => ({ bin: 'docker', kind: 'docker' }), daemonReachable: async () => true,
+    cloneAtPin: async () => {}, buildImage: async () => {},
+    containerIdOnPort: async () => null,                          // clean: nothing running on :8080
+    stopContainer: async (_e, name) => { calls.push('stop:' + name); },
+    runContainer: async () => { calls.push('run'); },
+    tagImage: async () => {}, removeImage: async () => {},
+    waitHealthy: async () => true,
+    verifyCandidate: async () => ({ decision: 'promote', lastKind: 'VALID', detail: '' }),
+    withBuildLock: async (fn) => fn(),
+    resolveClientConfig: () => '', version: '1.0.0',
+  };
+  const code = await cmdSetup(['--yes', '--print-only'], deps);
+  assert.equal(code, 0, 'clean install succeeds');
+  const stopIdx = calls.indexOf('stop:redlib-mcp'), runIdx = calls.indexOf('run');
+  assert.ok(stopIdx >= 0, 'clean install clears any stale same-name container (stopContainer redlib-mcp)');
+  assert.ok(stopIdx < runIdx, 'the stale-container clear happens BEFORE the direct bind');
+}
 // setup when :8080 is ALREADY running -> verify-before-swap on a temp port, not a direct bind.
 {
   const order = [];

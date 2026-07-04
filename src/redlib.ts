@@ -57,13 +57,11 @@ export async function detectEngine(
     if (r.code === 0) return { bin: override, kind: /podman/i.test(override) ? "podman" : "docker" };
     throw new Error(`REDLIB_ENGINE=${override} did not respond to \`version\`.`);
   }
-  const misses: string[] = [];
   for (const kind of ["docker", "podman"] as const) {
     for (const cand of CANDIDATES[kind]) {
       if (!exists(cand)) continue; // absolute-only: a candidate that is not on disk is never probed
       const r = await run(cand, ["version", "--format", "{{.Client.Version}}"]).catch(() => ({ stdout: "", stderr: "spawn failed", code: 127 }));
       if (r.code === 0) return { bin: cand, kind };
-      misses.push(cand);
     }
   }
   throw new Error(

@@ -196,6 +196,11 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
 
   if (!alreadyRunning) {
     // Clean install: nothing to protect, bind :port directly, then verify (spec §6.7).
+    // Clear any stale/stopped same-name container first (rm -f is a no-op when absent) so the fresh
+    // bind can't hit a `docker run --name redlib-mcp` conflict — the exact state doctor tells the
+    // user to fix by re-running setup. containerIdOnPort only sees RUNNING containers, so a stopped
+    // `redlib-mcp` slips past the alreadyRunning check and would otherwise crash the direct bind.
+    await d.stopContainer(engine, CONTAINER_NAME);
     await d.runContainer(engine, { image: IMAGE, name: CONTAINER_NAME, port, host });
     const url = `http://127.0.0.1:${port}`;
     if (!(await d.waitHealthy(url))) { say("container started but never became healthy; see `docker logs redlib-mcp`."); return 4; }
@@ -247,7 +252,7 @@ export interface UpdateDeps {
   daemonReachable: (e: Engine) => Promise<boolean>;
   cloneAtPin: (dir: string) => Promise<void>;
   buildImage: (dir: string, tag: string, e: Engine) => Promise<void>;
-  runContainer: (e: Engine, o: { image: string; name: string; port: number; host?: string }) => Promise<void>;
+  runContainer: (e: Engine, o: { image: string; name: string; port: number; host?: string; restart?: boolean }) => Promise<void>;
   stopContainer: (e: Engine, name: string) => Promise<void>;
   waitHealthy: (url: string) => Promise<boolean>;
   tagImage: (e: Engine, from: string, to: string) => Promise<void>;
@@ -284,7 +289,7 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
   const tmpPort = DEFAULT_PORT + 1;
   const tmpName = `${CONTAINER_NAME}-candidate`;
   await d.stopContainer(engine, tmpName);
-  await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1" });
+  await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1", restart: false });
   const tmpUrl = `http://127.0.0.1:${tmpPort}`;
   const healthy = await d.waitHealthy(tmpUrl);
   const v = healthy ? await d.verifyCandidate(tmpUrl) : { decision: "defer", lastKind: "REDLIB_DOWN", detail: "candidate never healthy" };
