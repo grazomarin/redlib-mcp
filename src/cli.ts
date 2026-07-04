@@ -1,9 +1,15 @@
 import {
   detectEngine, daemonReachable, containerIdOnPort, waitHealthy, hostArch, imageArch,
+  cloneAtPin, buildImage, runContainer, stopContainer, tagImage, removeImage, withBuildLock,
   type Engine,
 } from "./redlib.js";
 import { verifyCandidate } from "./verify.js";
 import { resolveRedlibUrl } from "./config.js";
+import { cloneDir, buildLockPath } from "./paths.js";
+import { REDLIB_PIN } from "./pin.js";
+import { mergeServer, writeAtomic, diffLines, type ServerEntry } from "./config-write.js";
+import { readFileSync, existsSync } from "node:fs";
+import { createInterface } from "node:readline";
 
 const CONTAINER_NAME = "redlib-mcp";
 const DEFAULT_PORT = 8080;
@@ -94,11 +100,152 @@ function printHelp(): void {
   );
 }
 
+const IMAGE = "localhost/redlib:latest";
+
+// Tiny hand-rolled flag parser (spec §14: no arg-parsing dependency; keeps cold-start light).
+// Supports `--flag`, `--key value`, `--key=value`. Unknown flags are tolerated (forward-compat).
+export function parseFlags(argv: string[]): Record<string, string | boolean> {
+  const f: Record<string, string | boolean> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) continue;
+    const eq = a.indexOf("=");
+    if (eq >= 0) { f[a.slice(2, eq)] = a.slice(eq + 1); continue; }
+    const key = a.slice(2);
+    const next = argv[i + 1];
+    if (next && !next.startsWith("--")) { f[key] = next; i++; } else { f[key] = true; }
+  }
+  return f;
+}
+
+// The MCP config entry `setup` writes. Immutable-versioned (spec §7): an absolute installed bin if
+// we have one (offline start, no registry round-trip), else EXACT-version npx — never floating.
+export function serverEntry(binPath: string | null, version: string): ServerEntry {
+  return binPath
+    ? { command: binPath, args: ["serve"] }
+    : { command: "npx", args: ["-y", `redlib-mcp@${version}`, "serve"] };
+}
+
+async function confirm(question: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return false; // non-TTY without --yes never auto-writes
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const ans: string = await new Promise((res) => rl.question(`${question} [y/N] `, res));
+  rl.close();
+  return /^y(es)?$/i.test(ans.trim());
+}
+
+export interface SetupDeps {
+  detectEngine: () => Promise<Engine>;
+  daemonReachable: (e: Engine) => Promise<boolean>;
+  cloneAtPin: (dir: string) => Promise<void>;
+  buildImage: (dir: string, tag: string, e: Engine) => Promise<void>;
+  containerIdOnPort: (e: Engine, port: number) => Promise<string | null>;
+  runContainer: (e: Engine, o: { image: string; name: string; port: number; host?: string }) => Promise<void>;
+  tagImage: (e: Engine, from: string, to: string) => Promise<void>;
+  removeImage: (e: Engine, tag: string) => Promise<void>;
+  stopContainer: (e: Engine, name: string) => Promise<void>;
+  waitHealthy: (url: string) => Promise<boolean>;
+  verifyCandidate: (url: string) => Promise<{ decision: string; lastKind: string; detail: string }>;
+  withBuildLock: (fn: () => Promise<void>) => Promise<void>;
+  resolveClientConfig: () => string;
+  version: string;
+}
+
+function withSetupDefaults(deps?: Partial<SetupDeps>): SetupDeps {
+  return {
+    detectEngine: () => detectEngine(),
+    daemonReachable: (e) => daemonReachable(e),
+    cloneAtPin: (dir) => cloneAtPin(dir),
+    buildImage: (dir, tag, e) => buildImage(dir, tag, e),
+    containerIdOnPort: (e, port) => containerIdOnPort(e, port),
+    runContainer: (e, o) => runContainer(e, o),
+    tagImage: (e, from, to) => tagImage(e, from, to),
+    removeImage: (e, tag) => removeImage(e, tag),
+    stopContainer: (e, name) => stopContainer(e, name),
+    waitHealthy: (url) => waitHealthy(url),
+    verifyCandidate: (url) => verifyCandidate(url),
+    withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds (spec §8)
+    resolveClientConfig: () => process.env.REDLIB_MCP_CLIENT_CONFIG || "",
+    version: "1.0.0",
+    ...deps,
+  };
+}
+
+export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promise<number> {
+  const flags = parseFlags(argv);
+  const port = parseInt((flags.port as string) || String(DEFAULT_PORT), 10);
+  const host = flags["non-loopback"] ? "0.0.0.0" : "127.0.0.1";
+  const d = withSetupDefaults(deps);
+
+  const engine = await d.detectEngine();
+  say(`engine: ${engine.kind} (${engine.bin})`);
+  if (!(await d.daemonReachable(engine))) { say("Docker/Podman daemon is not reachable — start it and re-run."); return 3; }
+  if (host === "0.0.0.0") say("WARNING: --non-loopback exposes an UNAUTHENTICATED Redlib to your LAN (Docker bypasses host firewalls). See spec §6.4.");
+
+  const alreadyRunning = await d.containerIdOnPort(engine, port);
+  const buildTag = alreadyRunning ? "localhost/redlib:building" : IMAGE;
+  const dir = cloneDir();
+  // Clone + build inside the build lock so a concurrent setup/update can't stack a second Rust compile.
+  await d.withBuildLock(async () => {
+    say(`cloning Redlib at pinned ${REDLIB_PIN.ref}@${REDLIB_PIN.sha.slice(0, 12)} -> ${dir}`);
+    await d.cloneAtPin(dir);
+    say(`building image (${buildTag}); first build compiles Rust and can take many minutes...`);
+    await d.buildImage(dir, buildTag, engine);
+  });
+
+  if (!alreadyRunning) {
+    // Clean install: nothing to protect, bind :port directly, then verify (spec §6.7).
+    await d.runContainer(engine, { image: IMAGE, name: CONTAINER_NAME, port, host });
+    const url = `http://127.0.0.1:${port}`;
+    if (!(await d.waitHealthy(url))) { say("container started but never became healthy; see `docker logs redlib-mcp`."); return 4; }
+    const v = await d.verifyCandidate(url);
+    if (v.decision !== "promote") { say(`verify failed (${v.lastKind}): ${v.detail}`); return 5; }
+    say("verified: serving valid content.");
+  } else {
+    // Re-setup/repair with a live service: verify the candidate on a TEMP port before swapping.
+    const tmpPort = port + 1;
+    const tmpName = `${CONTAINER_NAME}-candidate`;
+    await d.stopContainer(engine, tmpName);
+    await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1" });
+    const tmpUrl = `http://127.0.0.1:${tmpPort}`;
+    const healthy = await d.waitHealthy(tmpUrl);
+    const v = healthy ? await d.verifyCandidate(tmpUrl) : { decision: "defer", lastKind: "REDLIB_DOWN", detail: "candidate never healthy" };
+    await d.stopContainer(engine, tmpName);
+    if (v.decision === "promote") {
+      await d.tagImage(engine, buildTag, IMAGE);
+      await d.removeImage(engine, buildTag);
+      say("candidate verified and promoted to :latest. Restart the container to pick it up (or it will on next restart).");
+    } else if (v.decision === "discard") {
+      await d.removeImage(engine, buildTag); // broken build — throw the candidate away
+      say(`candidate DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`); return 5;
+    } else {
+      // defer: KEEP the candidate image unpromoted for re-verification (spec §5.2) — do NOT removeImage.
+      say(`candidate inconclusive (${v.lastKind}): ${v.detail}. Kept the current image serving; candidate retained as ${buildTag}. Re-run \`redlib-mcp update\` later to re-verify.`); return 6;
+    }
+  }
+
+  // Register the MCP into the caller's client config (atomic, diff + confirm) — spec §5.2 step 6.
+  const cfgPath = d.resolveClientConfig();
+  // No config path (env unset, no --client) -> the backend is ready; skip registration rather than
+  // crash. writeAtomic("") would renameSync into "" and throw ENOENT AFTER a successful build.
+  // Plan 3's skill supplies the per-agent path; a bare `setup` without it still succeeds here.
+  if (!cfgPath) { say("Backend is ready. No MCP client-config path given (set REDLIB_MCP_CLIENT_CONFIG or run via the setup skill) — skipping client registration."); return 0; }
+  const before = existsSync(cfgPath) ? readFileSync(cfgPath, "utf8") : "";
+  const entry = serverEntry(null, d.version); // Plan 3's skill may pass an absolute bin; default exact-version npx
+  const { text } = mergeServer(before, "redlib-mcp", entry);
+  say(`\nMCP client config: ${cfgPath}\n${diffLines(before, text)}`);
+  if (flags["print-only"]) { say("(--print-only: not writing the config.)"); return 0; }
+  if (!flags.yes && !(await confirm("Write this MCP entry?"))) { say("Skipped config write. Re-run with --yes to apply."); return 0; }
+  writeAtomic(cfgPath, text);
+  say(`wrote ${cfgPath} (backup at ${cfgPath}.bak).`);
+  return 0;
+}
+
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[0];
   switch (cmd) {
     case "doctor": return cmdDoctor();
-    case "setup": say("redlib-mcp setup: implemented in the next task of this plan."); return 2;   // Task 8
+    case "setup": return cmdSetup(argv.slice(1));
     case "update": say("redlib-mcp update: implemented in the next task of this plan."); return 2; // Task 9
     default: printHelp(); return cmd ? 2 : 0;
   }
