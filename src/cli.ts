@@ -242,12 +242,78 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
   return 0;
 }
 
+export interface UpdateDeps {
+  detectEngine: () => Promise<Engine>;
+  daemonReachable: (e: Engine) => Promise<boolean>;
+  cloneAtPin: (dir: string) => Promise<void>;
+  buildImage: (dir: string, tag: string, e: Engine) => Promise<void>;
+  runContainer: (e: Engine, o: { image: string; name: string; port: number; host?: string }) => Promise<void>;
+  stopContainer: (e: Engine, name: string) => Promise<void>;
+  waitHealthy: (url: string) => Promise<boolean>;
+  tagImage: (e: Engine, from: string, to: string) => Promise<void>;
+  removeImage: (e: Engine, tag: string) => Promise<void>;
+  verifyCandidate: (url: string) => Promise<{ decision: string; lastKind: string; detail: string }>;
+  withBuildLock: (fn: () => Promise<void>) => Promise<void>;
+}
+
+// `update` rebuilds Redlib AT THE PINNED COMMIT (never live-fetches HEAD) to a temp tag, verifies
+// it on a temp port, and promotes :latest ONLY on valid data. PARSE_ERROR discards (keep old);
+// a transient defers (keep old, re-verify later). The live service is never disrupted (spec §6.7).
+export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Promise<number> {
+  const d: UpdateDeps = {
+    detectEngine: () => detectEngine(), daemonReachable: (e) => daemonReachable(e),
+    cloneAtPin: (dir) => cloneAtPin(dir), buildImage: (dir, tag, e) => buildImage(dir, tag, e),
+    runContainer: (e, o) => runContainer(e, o), stopContainer: (e, n) => stopContainer(e, n),
+    waitHealthy: (u) => waitHealthy(u), tagImage: (e, f, t) => tagImage(e, f, t),
+    removeImage: (e, t) => removeImage(e, t), verifyCandidate: (u) => verifyCandidate(u),
+    withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds (spec §8)
+    ...deps,
+  };
+  const engine = await d.detectEngine();
+  if (!(await d.daemonReachable(engine))) { say("daemon not reachable; start it and re-run."); return 3; }
+
+  const dir = cloneDir();
+  const buildTag = "localhost/redlib:building";
+  // Clone + build inside the build lock so a concurrent setup/update can't stack a second Rust compile.
+  await d.withBuildLock(async () => {
+    say(`rebuilding Redlib at pinned ${REDLIB_PIN.ref}@${REDLIB_PIN.sha.slice(0, 12)}`);
+    await d.cloneAtPin(dir);
+    await d.buildImage(dir, buildTag, engine);
+  });
+
+  const tmpPort = DEFAULT_PORT + 1;
+  const tmpName = `${CONTAINER_NAME}-candidate`;
+  await d.stopContainer(engine, tmpName);
+  await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1" });
+  const tmpUrl = `http://127.0.0.1:${tmpPort}`;
+  const healthy = await d.waitHealthy(tmpUrl);
+  const v = healthy ? await d.verifyCandidate(tmpUrl) : { decision: "defer", lastKind: "REDLIB_DOWN", detail: "candidate never healthy" };
+  await d.stopContainer(engine, tmpName);
+
+  if (v.decision === "promote") {
+    await d.tagImage(engine, buildTag, IMAGE);
+    await d.removeImage(engine, buildTag);
+    say("update verified and promoted to :latest. Restart the container to apply.");
+    return 0;
+  }
+  if (v.decision === "discard") {
+    await d.removeImage(engine, buildTag); // broken build/parse — throw the candidate away
+    say(`update DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`);
+    return 5;
+  }
+  // defer: inconclusive — KEEP the candidate image unpromoted for later re-verification (spec §5.2
+  // update bullet: "keep old serving, keep the new image unpromoted, tell the user to re-verify
+  // later"). Do NOT removeImage here — deleting it would waste the long build and break the re-verify path.
+  say(`update inconclusive (${v.lastKind}): ${v.detail}. Kept the current image serving; the new candidate is retained as ${buildTag} — re-run \`redlib-mcp update\` later to re-verify. If it persists at this pin, upstream Redlib has no fix yet — not your setup.`);
+  return 6;
+}
+
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[0];
   switch (cmd) {
     case "doctor": return cmdDoctor();
     case "setup": return cmdSetup(argv.slice(1));
-    case "update": say("redlib-mcp update: implemented in the next task of this plan."); return 2; // Task 9
+    case "update": return cmdUpdate(argv.slice(1));
     default: printHelp(); return cmd ? 2 : 0;
   }
 }
