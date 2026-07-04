@@ -7,12 +7,15 @@ import { z } from "zod";
 import fetch from "node-fetch";
 import { RedlibError, classifyRedlib, assertRedlibContent } from "./errors.js";
 import { resolveRedlibUrl } from "./config.js";
+import { MinIntervalLimiter } from "./limiter.js";
 
 // Configuration
 const REDLIB_BASE_URL = resolveRedlibUrl();
 const USE_HTTP = process.env.USE_HTTP === "true";
 const HTTP_TOKEN = process.env.REDLIB_MCP_TOKEN || ""; // required bearer for USE_HTTP mode
 const COMMENT_BODY_CAP = 1200;
+const REDLIB_MIN_INTERVAL_MS = parseInt(process.env.REDLIB_MIN_INTERVAL_MS || "300", 10); // gentle default
+const limiter = new MinIntervalLimiter(REDLIB_MIN_INTERVAL_MS);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const enc = encodeURIComponent;
@@ -21,6 +24,7 @@ const enc = encodeURIComponent;
 // and a content-type guard so a non-HTML block/error page never reaches cheerio.
 // Throws a descriptive Error on 4xx / non-HTML / final failure.
 async function fetchRedlib(path: string, timeoutMs = 15000): Promise<string> {
+  await limiter.acquire();
   const url = `${REDLIB_BASE_URL}${path}`;
   let lastErr: any;
   for (let attempt = 0; attempt < 3; attempt++) {
