@@ -9,7 +9,15 @@ jobs:
         with: { node-version: '20' }
       - run: node scripts/check-forbidden-words.mjs
   tests:
-    runs-on: ubuntu-latest
+    # Run the offline suite natively on all three OSes. This catches real cross-platform Node bugs
+    # (path separators, shell quoting, line endings) that the platform-injected unit tests can't —
+    # they fake process.platform on Linux. It does NOT bring up Redlib (no container daemon here);
+    # that's the separate, opt-in from-scratch.yml workflow.
+    strategy:
+      fail-fast: false   # let all three OS results surface, don't cancel siblings on first failure
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
