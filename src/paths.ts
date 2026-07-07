@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-// Per-OS data dir for the Redlib clone + build state (spec §14). env/platform are injectable so
+// Per-OS data dir for the Redlib clone + build state. env/platform are injectable so
 // the resolver is testable off-host. Linux honors XDG_DATA_HOME.
 export function dataDir(env: NodeJS.ProcessEnv = process.env, platform: string = process.platform): string {
   if (platform === "win32") {
@@ -17,7 +17,7 @@ export function cloneDir(env?: NodeJS.ProcessEnv, platform?: string): string {
   return join(dataDir(env, platform), "redlib-src");
 }
 
-// A build lock so concurrent agent retries can't stack parallel Rust compiles (spec §8).
+// A build lock so concurrent agent retries can't stack parallel Rust compiles.
 export function buildLockPath(env?: NodeJS.ProcessEnv, platform?: string): string {
   return join(dataDir(env, platform), "build.lock");
 }

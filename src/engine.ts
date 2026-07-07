@@ -11,7 +11,7 @@ export type Runner = (
   opts?: { cwd?: string; timeoutMs?: number; stream?: boolean },
 ) => Promise<RunResult>;
 
-// The one place a subprocess is spawned. ALWAYS an argv array + shell:false (spec §8 — never sh -c).
+// The one place a subprocess is spawned. ALWAYS an argv array + shell:false (never sh -c).
 // `stream` forwards the child's stderr live (long Rust builds) while still capturing it.
 export const defaultRunner: Runner = (file, args, opts = {}) =>
   new Promise<RunResult>((resolve) => {
@@ -29,7 +29,7 @@ export const defaultRunner: Runner = (file, args, opts = {}) =>
 
 export interface Engine { bin: string; kind: "docker" | "podman"; }
 
-// Explicit ABSOLUTE candidate paths ONLY (spec §8 — "not bare PATH"). A bare `docker`/`podman`
+// Explicit ABSOLUTE candidate paths ONLY ("not bare PATH"). A bare `docker`/`podman`
 // resolved via the child's PATH is a hijack surface (a malicious binary earlier in PATH runs), so
 // it is deliberately NOT searched. A non-standard install is reachable via the REDLIB_ENGINE
 // override below (still an explicit absolute path, not PATH resolution).
@@ -52,7 +52,7 @@ export async function detectEngine(
   env: NodeJS.ProcessEnv = process.env,
   exists: (p: string) => boolean = existsSync,
 ): Promise<Engine> {
-  // Explicit override: an ABSOLUTE path the operator vouches for — NOT bare-PATH resolution (spec §8).
+  // Explicit override: an ABSOLUTE path the operator vouches for — NOT bare-PATH resolution.
   const override = env.REDLIB_ENGINE;
   if (override) {
     // ABSOLUTE only: a bare name PATH-resolves, and a relative name (e.g. "./docker") resolves against
@@ -72,7 +72,7 @@ export async function detectEngine(
   }
   throw new Error(
     `No working container engine found at the standard absolute paths (${[...CANDIDATES.docker, ...CANDIDATES.podman].join(", ")}). ` +
-    `Bare PATH is intentionally not searched (spec §8); set REDLIB_ENGINE to an absolute docker/podman path if yours is elsewhere. Is Docker Desktop (or Podman) running?`,
+    `Bare PATH is intentionally not searched; set REDLIB_ENGINE to an absolute docker/podman path if yours is elsewhere. Is Docker Desktop (or Podman) running?`,
   );
 }
 
@@ -91,7 +91,7 @@ async function ok(r: RunResult, label: string): Promise<RunResult> {
 // Clone/fetch Redlib at the IMMUTABLE pinned SHA and detach onto it. We fetch the exact commit
 // (GitHub serves reachable SHAs); if the server refuses a bare-SHA want, fall back to fetching the
 // branch, then check the SHA out of its history. Finally assert HEAD == pin — a redirected or
-// force-moved remote can't slip an unpinned tree past this (spec §6.1).
+// force-moved remote can't slip an unpinned tree past this.
 export async function cloneAtPin(dir: string, run: Runner = defaultRunner, pin = REDLIB_PIN): Promise<void> {
   mkdirSync(dir, { recursive: true });
   // git is resolved via PATH (unlike the container engine, which is absolute-only). Hardening git to
@@ -115,21 +115,21 @@ export async function cloneAtPin(dir: string, run: Runner = defaultRunner, pin =
   if (head !== pin.sha) throw new Error(`Redlib clone HEAD ${head} != pinned ${pin.sha} — refusing to build an unpinned tree`);
 }
 
-// Node's arch names -> OCI arch names, for the doctor arch-match check (spec §6.2).
+// Node's arch names -> OCI arch names, for the doctor arch-match check.
 export function hostArch(a: string = osArch()): string {
   if (a === "x64") return "amd64";
   if (a === "arm64") return "arm64";
   return a;
 }
 
-// The arch the built image actually targets (spec §6.2: warn/abort on an emulated mismatch).
+// The arch the built image actually targets (warn/abort on an emulated mismatch).
 export async function imageArch(engine: Engine, tag: string, run: Runner = defaultRunner): Promise<string> {
   const r = await run(engine.bin, ["image", "inspect", tag, "--format", "{{.Architecture}}"]);
   return r.code === 0 ? r.stdout.trim() : "";
 }
 
-// Build Redlib FROM SOURCE with Dockerfile.ubuntu ONLY (spec §6.2). Generous first-build timeout
-// (Rust compile) distinct from the runtime health timeout (spec §8). Streams progress live.
+// Build Redlib FROM SOURCE with Dockerfile.ubuntu ONLY. Generous first-build timeout
+// (Rust compile) distinct from the runtime health timeout. Streams progress live.
 // `-f` must be the Dockerfile INSIDE the clone dir: BuildKit (docker-desktop's default builder)
 // resolves a `-f` path relative to the CLI's CWD, NOT the build context, so a bare "Dockerfile.ubuntu"
 // looks in the caller's CWD and fails with "no such file". Qualify it against `dir`.
@@ -147,7 +147,7 @@ export async function runContainer(
   opts: { image: string; name: string; port: number; host?: string; restart?: boolean },
   run: Runner = defaultRunner,
 ): Promise<void> {
-  const host = opts.host ?? "127.0.0.1"; // loopback default (spec §6.4)
+  const host = opts.host ?? "127.0.0.1"; // loopback default
   const args = ["run", "-d", "--name", opts.name, "-p", `${host}:${opts.port}:8080`];
   if (opts.restart !== false) args.push("--restart", "unless-stopped");
   args.push(opts.image);
@@ -176,7 +176,7 @@ export async function removeImage(engine: Engine, tag: string, run: Runner = def
   await run(engine.bin, ["rmi", "-f", tag]); // best-effort cleanup
 }
 
-// Poll a Redlib URL until it answers 200, or give up. Distinct from the build timeout (spec §8).
+// Poll a Redlib URL until it answers 200, or give up. Distinct from the build timeout.
 // fetchFn injectable for tests; defaults to global fetch (Node ≥18).
 export async function waitHealthy(
   url: string,
@@ -192,10 +192,10 @@ export async function waitHealthy(
   return false;
 }
 
-// Cross-platform build lock (spec §8): create a sentinel with O_EXCL ("wx"); if it already exists
+// Cross-platform build lock: create a sentinel with O_EXCL ("wx"); if it already exists
 // and is fresh, another build is running -> refuse (do not stack a second multi-minute Rust
 // compile). A lock older than staleMs is assumed crashed and reclaimed. Always released in finally.
-// ponytail: an O_EXCL sentinel is enough for one-machine single-user serialization; no lock daemon.
+// an O_EXCL sentinel is enough for one-machine single-user serialization; no lock daemon.
 export async function withBuildLock<T>(lockPath: string, fn: () => Promise<T>, opts: { staleMs?: number } = {}): Promise<T> {
   const staleMs = opts.staleMs ?? 30 * 60 * 1000; // > worst-case build
   mkdirSync(dirname(lockPath), { recursive: true });

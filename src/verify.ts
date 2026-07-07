@@ -6,11 +6,11 @@ import { assertContentLoaded, RedlibError } from "./errors.js";
 export type SwapDecision = "promote" | "discard" | "defer";
 
 // Smoke a candidate Redlib on its temp port and decide whether to promote it over the live image
-// (spec §6.7). "Valid data" here is a REAL end-to-end parser check (spec §5.2 step 5), not just the
+// "Valid data" here is a REAL end-to-end parser check, not just the
 // #column_one shell: assertRedlibContent rejects error/info pages, AND the actual `.post` parser
 // (the same $('.post') selector the MCP tools use, index.ts) must find at least one post on the
 // known-populated smoke sub. A #column_one shell with ZERO posts is the stale-spoofing / parser-
-// drift failure and must NOT promote. The result is disambiguated via Plan 1's typed enum (§6.3):
+// drift failure and must NOT promote. The result is disambiguated via the typed error enum:
 //   valid data (shell + >=1 parseable post) -> promote
 //   persistent PARSE_ERROR (error page OR empty/unparseable listing) -> build/parse broken -> discard
 //   persistent transient throttle/down/token-stale -> inconclusive -> defer (keep old)
@@ -42,7 +42,7 @@ export async function verifyCandidate(
       lastKind = e instanceof RedlibError ? e.kind : "UNKNOWN";
       if (isLast) {
         // Only a persistent PARSE_ERROR discards (broken build/parse). EVERY other terminal kind ->
-        // defer. This is a deliberate safe default, slightly broader than spec §6.7's literal
+        // defer. This is a deliberate safe default, slightly broader than the literal
         // "transient": a non-transient CONTENT_UNAVAILABLE on the smoke probe also defers rather
         // than discards, because defer never disrupts the live service and never throws away a
         // possibly-fine build over a one-off — a genuinely broken build surfaces PARSE_ERROR (or the

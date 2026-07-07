@@ -63,7 +63,7 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
     check: "end-to-end smoke",
     ok: smokeOk,
     detail: smokeOk ? "valid content" : `${v.lastKind}: ${v.detail}`,
-    // The §6.3 terminal window: at the pinned commit but reads still fail -> upstream lag, not the user.
+    // The terminal window: at the pinned commit but reads still fail -> upstream lag, not the user.
     fix: smokeOk ? undefined
       : v.lastKind === "PARSE_ERROR"
         ? "Redlib output changed shape — likely a redlib-mcp/pin mismatch; run `redlib-mcp update`."
@@ -138,7 +138,7 @@ async function verifyBeforeSwap(engine: Engine, d: SwapDeps, buildTag: string, t
   return v;
 }
 
-// Tiny hand-rolled flag parser (spec §14: no arg-parsing dependency; keeps cold-start light).
+// Tiny hand-rolled flag parser (no arg-parsing dependency; keeps cold-start light).
 // Supports `--flag`, `--key value`, `--key=value`. Unknown flags are tolerated (forward-compat).
 export function parseFlags(argv: string[]): Record<string, string | boolean> {
   const f: Record<string, string | boolean> = {};
@@ -154,7 +154,7 @@ export function parseFlags(argv: string[]): Record<string, string | boolean> {
   return f;
 }
 
-// The MCP config entry `setup` writes. Immutable-versioned (spec §7): an absolute installed bin if
+// The MCP config entry `setup` writes. Immutable-versioned: an absolute installed bin if
 // we have one (offline start, no registry round-trip), else EXACT-version npx — never floating.
 export function serverEntry(binPath: string | null, version: string): ServerEntry {
   return binPath
@@ -200,7 +200,7 @@ function withSetupDefaults(deps?: Partial<SetupDeps>): SetupDeps {
     stopContainer: (e, name) => stopContainer(e, name),
     waitHealthy: (url) => waitHealthy(url),
     verifyCandidate: (url) => verifyCandidate(url),
-    withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds (spec §8)
+    withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds
     resolveClientConfig: () => process.env.REDLIB_MCP_CLIENT_CONFIG || "",
     version: VERSION,
     ...deps,
@@ -217,7 +217,7 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
   const engine = await d.detectEngine();
   say(`engine: ${engine.kind} (${engine.bin})`);
   if (!(await d.daemonReachable(engine))) { say("Docker/Podman daemon is not reachable — start it and re-run."); return 3; }
-  if (host === "0.0.0.0") say("WARNING: --non-loopback exposes an UNAUTHENTICATED Redlib to your LAN (Docker bypasses host firewalls). See spec §6.4.");
+  if (host === "0.0.0.0") say("WARNING: --non-loopback exposes an UNAUTHENTICATED Redlib to your LAN (Docker bypasses host firewalls).");
 
   const alreadyRunning = await d.containerIdOnPort(engine, port);
   const buildTag = alreadyRunning ? BUILD_TAG : IMAGE;
@@ -231,7 +231,7 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
   });
 
   if (!alreadyRunning) {
-    // Clean install: nothing to protect, bind :port directly, then verify (spec §6.7).
+    // Clean install: nothing to protect, bind :port directly, then verify.
     // Clear any stale/stopped same-name container first (rm -f is a no-op when absent) so the fresh
     // bind can't hit a `docker run --name redlib-mcp` conflict — the exact state doctor tells the
     // user to fix by re-running setup. containerIdOnPort only sees RUNNING containers, so a stopped
@@ -251,14 +251,14 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
     else { say(`candidate inconclusive (${v.lastKind}): ${v.detail}. Kept the current image serving; candidate retained as ${buildTag}. Re-run \`redlib-mcp update\` later to re-verify.`); return 6; }
   }
 
-  // Register the MCP into the caller's client config (atomic, diff + confirm) — spec §5.2 step 6.
+  // Register the MCP into the caller's client config (atomic, diff + confirm).
   const cfgPath = d.resolveClientConfig();
   // No config path (env unset, no --client) -> the backend is ready; skip registration rather than
   // crash. writeAtomic("") would renameSync into "" and throw ENOENT AFTER a successful build.
-  // Plan 3's skill supplies the per-agent path; a bare `setup` without it still succeeds here.
+  // the setup skill supplies the per-agent path; a bare `setup` without it still succeeds here.
   if (!cfgPath) { say("Backend is ready. No MCP client-config path given (set REDLIB_MCP_CLIENT_CONFIG or run via the setup skill) — skipping client registration."); return 0; }
   const before = existsSync(cfgPath) ? readFileSync(cfgPath, "utf8") : "";
-  const entry = serverEntry(null, d.version); // Plan 3's skill may pass an absolute bin; default exact-version npx
+  const entry = serverEntry(null, d.version); // the setup skill may pass an absolute bin; default exact-version npx
   const { text } = mergeServer(before, "redlib-mcp", entry);
   say(`\nMCP client config: ${cfgPath}\n${diffLines(before, text)}`);
   if (flags["print-only"]) { say("(--print-only: not writing the config.)"); return 0; }
@@ -284,7 +284,7 @@ export interface UpdateDeps {
 
 // `update` rebuilds Redlib AT THE PINNED COMMIT (never live-fetches HEAD) to a temp tag, verifies
 // it on a temp port, and promotes :latest ONLY on valid data. PARSE_ERROR discards (keep old);
-// a transient defers (keep old, re-verify later). The live service is never disrupted (spec §6.7).
+// a transient defers (keep old, re-verify later). The live service is never disrupted.
 export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Promise<number> {
   const d: UpdateDeps = {
     detectEngine: () => detectEngine(), daemonReachable: (e) => daemonReachable(e),
@@ -292,7 +292,7 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
     runContainer: (e, o) => runContainer(e, o), stopContainer: (e, n) => stopContainer(e, n),
     waitHealthy: (u) => waitHealthy(u), tagImage: (e, f, t) => tagImage(e, f, t),
     removeImage: (e, t) => removeImage(e, t), verifyCandidate: (u) => verifyCandidate(u),
-    withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds (spec §8)
+    withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds
     ...deps,
   };
   const engine = await d.detectEngine();

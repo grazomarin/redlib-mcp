@@ -1,4 +1,4 @@
-// ponytail: a single-process min-interval gate is enough for a local single-user tool;
+// a single-process min-interval gate is enough for a local single-user tool;
 // upgrade to a token bucket only if concurrency ever matters.
 export class MinIntervalLimiter {
   private minMs: number;

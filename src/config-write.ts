@@ -5,7 +5,7 @@ export interface ServerEntry { command: string; args: string[]; env?: Record<str
 // Strip // line comments and /* */ block comments so a JSONC client config (Claude Code, VS Code)
 // parses. Deliberately simple — string-literal awareness is more than this local tool needs;
 // worst case, a `//` inside a JSON string value is mishandled and we throw, which fails SAFE
-// (we refuse rather than clobber). ponytail: regex, upgrade to a real JSONC parser only if a real
+// (we refuse rather than clobber). Upgrade to a real JSONC parser only if a real
 // config trips it.
 function stripJsonc(text: string): string {
   return text
@@ -14,7 +14,7 @@ function stripJsonc(text: string): string {
 }
 
 // Merge one server entry into an MCP client config's servers map WITHOUT touching siblings
-// (spec §8). Returns the parsed object + pretty text; does not write. Throws if the existing text
+// Returns the parsed object + pretty text; does not write. Throws if the existing text
 // is non-empty and unparseable — we never overwrite a config we can't understand.
 export function mergeServer(
   existingText: string,
@@ -39,7 +39,7 @@ export function mergeServer(
   return { obj, text: JSON.stringify(obj, null, 2) + "\n" };
 }
 
-// Atomic, non-destructive write (spec §8): back up the prior file, write a temp + fsync, rename
+// Atomic, non-destructive write: back up the prior file, write a temp + fsync, rename
 // into place (atomic on the same filesystem).
 export function writeAtomic(path: string, content: string): void {
   if (existsSync(path)) copyFileSync(path, `${path}.bak`);
