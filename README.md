@@ -35,8 +35,16 @@ npx -y redlib-mcp@1.0.0 setup
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `REDLIB_URL` | `http://127.0.0.1:8080` | Your Redlib instance. Use `127.0.0.1`, not `localhost` (a dual-stack host may resolve `localhost` to `::1` and miss the loopback-only bind). |
+| `REDLIB_MIN_INTERVAL_MS` | `300` | Minimum spacing between requests to your backend. |
+| `REDLIB_ALLOW_REMOTE` | (unset) | Set to `1` to allow a non-loopback `REDLIB_URL` (off by default). |
+| `REDLIB_MCP_CLIENT_CONFIG` | (unset) | Path to the MCP client config file that `setup` registers the server into. |
+| `REDLIB_ENGINE` | (auto) | Absolute path to a `docker`/`podman` binary to force the engine (a bare or relative name is rejected). |
 
 The MCP talks only to your own loopback Redlib and never contacts reddit.com directly; it applies a conservative request rate cap.
+
+**HTTP transport (advanced).** By default the server speaks MCP over stdio. Set `USE_HTTP=true` to serve over HTTP on `127.0.0.1` (loopback) at `PORT` (default `3000`); set `REDLIB_MCP_TOKEN` to require a bearer token (recommended — without it the endpoint is unauthenticated). DNS-rebinding protection is on.
+
+**CLI exit codes** (`setup`/`update`/`doctor`): `0` success · `2` bad flag/unknown command · `3` container engine/daemon unreachable · `4` container started but unhealthy · `5` verification failed (build discarded) · `6` verification inconclusive (kept current image).
 
 ## Platform support
 
