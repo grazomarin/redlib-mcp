@@ -137,7 +137,7 @@ export async function buildImage(dir: string, tag: string, engine: Engine, run: 
   const r = await run(
     engine.bin,
     ["build", "-f", join(dir, "Dockerfile.ubuntu"), "-t", tag, dir],
-    { timeoutMs: 1_200_000, stream: true }, // 20 min; matches the reference quadlet TimeoutStartSec
+    { timeoutMs: 1_200_000, stream: true }, // 20 min; a from-source Redlib (Rust) build is slow
   );
   if (r.code !== 0) throw new Error(`Redlib image build failed (${engine.kind}). Last build output:\n${r.stderr.slice(-2000)}`);
 }

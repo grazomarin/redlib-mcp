@@ -10,7 +10,7 @@ const FORBIDDEN = [
 const files = process.argv.slice(2);
 const targets = files.length ? files : [
   'README.md', 'package.json', 'skills/setup-redlib/SKILL.md', 'src/index.ts',
-  'server.json', 'NOTICE', 'PUBLISHING.md', 'linux/README.md', 'linux/redlib.container',
+  'server.json', 'NOTICE', 'PUBLISHING.md',
 ];
 
 let hits = 0;

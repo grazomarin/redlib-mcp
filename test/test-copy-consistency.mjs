@@ -18,5 +18,5 @@ assert.ok(skill.includes(HOOK), 'SKILL.md frontmatter description');
 // framing blocklist over EVERY public surface at once (Plan 1 gate)
 execFileSync('node', ['scripts/check-forbidden-words.mjs',
   'README.md', 'package.json', 'server.json', 'skills/setup-redlib/SKILL.md', 'NOTICE',
-  'PUBLISHING.md', 'linux/README.md', 'linux/redlib.container']);
+  'PUBLISHING.md']);
 console.log('ALL PASS');

@@ -8,7 +8,7 @@
   "bin": {
     "redlib-mcp": "dist/entry.js"
   },
-  "files": ["dist", "skills", "server.json", "linux", "NOTICE", "README.md", "LICENSE"],
+  "files": ["dist", "skills", "server.json", "NOTICE", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
