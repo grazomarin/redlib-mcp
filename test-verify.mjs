@@ -1,12 +1,14 @@
 import assert from 'node:assert';
 import { verifyCandidate } from './dist/verify.js';
+import { RedlibError } from './dist/errors.js';
 
 // Inject a fake backend so we test the DECISION logic (spec §6.7) without a container:
 // valid data -> promote; persistent PARSE_ERROR -> discard; persistent transient -> defer.
 // A valid page has the #column_one shell AND at least one real .post node (index.ts's selector).
 const validHtml = '<html><body><div id="column_one"><div class="post"><a class="post_title" href="/r/x/comments/ab/t">hi</a></div></div></body></html>';
 const backendReturning = (html) => () => ({ fetch: async () => html });
-const backendThrowing = (kind) => () => ({ fetch: async () => { const e = new Error(kind); e.kind = kind; throw e; } });
+const backendThrowing = (kind) => () => ({ fetch: async () => { throw new RedlibError(kind, kind); } });
+const backendThrowingPlain = () => ({ fetch: async () => { throw new Error('unexpected non-RedlibError (e.g. cheerio blew up)'); } });
 
 // valid (shell + a real post) -> promote
 {
@@ -29,6 +31,11 @@ const backendThrowing = (kind) => () => ({ fetch: async () => { const e = new Er
 {
   const r = await verifyCandidate('http://127.0.0.1:8099', { retries: 2, backoffMs: 1 }, backendThrowing('RATE_LIMITED'));
   assert.equal(r.decision, 'defer', `transient should defer, got ${r.decision}`);
+}
+// an UNEXPECTED non-RedlibError throw must NOT discard a good build -> defer (keep old serving)
+{
+  const r = await verifyCandidate('http://127.0.0.1:8099', { retries: 2, backoffMs: 1 }, backendThrowingPlain);
+  assert.equal(r.decision, 'defer', `unexpected non-RedlibError should defer, not discard, got ${r.decision}`);
 }
 // recovers on retry -> promote (first attempt down, second valid)
 {

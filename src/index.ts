@@ -268,10 +268,10 @@ server.tool(
       let sub = subreddit, pid = postId;
       if (url) {
         const m = url.match(/\/r\/([^/]+)\/comments\/([a-z0-9]+)/i);
-        if (!m) return fail(`Could not parse subreddit/postId from url: ${url}`);
+        if (!m) return fail(`Could not parse subreddit/postId from url: ${url}`, "BAD_INPUT");
         sub = m[1]; pid = m[2];
       }
-      if (!sub || !pid) return fail("Provide either (subreddit + postId) or a full reddit url.");
+      if (!sub || !pid) return fail("Provide either (subreddit + postId) or a full reddit url.", "BAD_INPUT");
       const params = new URLSearchParams();
       if (sort) params.set("sort", sort === "best" ? "confidence" : sort);
       const qs = params.toString();
@@ -282,7 +282,7 @@ server.tool(
       assertRedlibContent(html);
       const data = parsePostDetails(html, max_comments ?? 50) as any;
       if (!data.title && !data.body && data.comments_in_page === 0) {
-        return fail(`Post ${sub}/${pid} came back empty — likely a wrong/removed postId or a Redlib hiccup.`);
+        return fail(`Post ${sub}/${pid} came back empty — likely a wrong/removed postId or a Redlib hiccup.`, "CONTENT_UNAVAILABLE");
       }
       return compact(data);
     } catch (e: any) { return fail(`Error fetching post: ${e?.message || e}`, e instanceof RedlibError ? e.kind : "PARSE_ERROR"); }

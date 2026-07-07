@@ -35,7 +35,10 @@ export async function verifyCandidate(
       if (posts === 0) throw new RedlibError("PARSE_ERROR", "candidate served 0 parseable posts on a populated sub — stale spoofing or parser drift");
       return { decision: "promote", lastKind: "VALID", detail: `candidate served ${posts} parseable posts` };
     } catch (e: any) {
-      lastKind = e?.kind ?? "PARSE_ERROR";
+      // Only a GENUINE RedlibError PARSE_ERROR is a broken build/parse. An unexpected non-RedlibError
+      // (e.g. cheerio blew up) must NOT be read as PARSE_ERROR — that would discard a possibly-fine
+      // multi-minute build. Map anything unrecognized to UNKNOWN, which falls to the safe `defer`.
+      lastKind = e instanceof RedlibError ? e.kind : "UNKNOWN";
       if (isLast) {
         // Only a persistent PARSE_ERROR discards (broken build/parse). EVERY other terminal kind ->
         // defer. This is a deliberate safe default, slightly broader than spec §6.7's literal

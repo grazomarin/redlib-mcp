@@ -26,9 +26,9 @@ export class RedlibError extends Error {
   }
 }
 
-// Body markers captured from the built Redlib image (spec §6.3), NOT authored by hand
-// long-term — the golden-file test regenerates them per pin bump. Order matters:
-// most-specific first.
+// Body markers hand-maintained from the built Redlib image's error/info pages. Re-derive these
+// (and the test-errors fixtures) from a freshly built image on each pin bump — the test asserts
+// them, it does not regenerate them. Order matters: most-specific first.
 const BODY_MARKERS: ReadonlyArray<[RegExp, RedlibErrorKind]> = [
   [/too many requests|rate limit/i, "RATE_LIMITED"],
   [/oauth token (has )?expired/i, "UPSTREAM_TOKEN_STALE"],
@@ -46,6 +46,8 @@ export function classifyRedlib(status: number, bodyText: string): RedlibErrorKin
     for (const [re, kind] of BODY_MARKERS) if (re.test(bodyText)) return kind;
     return "CONTENT_UNAVAILABLE"; // generic 404 error page: gone/removed/not-found
   }
+  if (status === 429) return "RATE_LIMITED"; // a proxy/CDN fronting Redlib may 429 (Redlib's own throttle is 404+body); retryable, must NOT discard a build
+  if (status === 408) return "REDLIB_DOWN";  // request timeout -> transient
   return "PARSE_ERROR";
 }
 

@@ -10,6 +10,9 @@ const cases = [
   [404, '<div class="error"><h1>Nothing here</h1><p>Post not found</p></div>', 'CONTENT_UNAVAILABLE'],
   [403, '<div class="nsfw_landing">This post is NSFW</div>', 'CONTENT_UNAVAILABLE'],
   [500, '<h1>500 Internal Server Error</h1>', 'REDLIB_DOWN'],
+  [429, 'Too Many Requests', 'RATE_LIMITED'],  // a proxied 429 must be RETRYABLE, not a build-discarding PARSE_ERROR
+  [408, '', 'REDLIB_DOWN'],                     // request timeout -> transient
+  [400, '', 'PARSE_ERROR'],                     // a genuinely unexpected status is still PARSE_ERROR (documents the boundary)
   [200, '<div class="post">ok</div>', null],
 ];
 let pass = 0, fail = 0;
