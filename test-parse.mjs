@@ -1,57 +1,42 @@
-import * as cheerio from 'cheerio';
+import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
+import { parsePostDetails, pruneBFS, nextAfter } from './dist/parse.js';
 
-const html = readFileSync(new URL('./sample-post.html', import.meta.url), 'utf8');
-const $ = cheerio.load(html);
+// Exercise the REAL parser (index.ts's core, now in parse.ts) against the captured fixture —
+// not a hand-rolled copy. A parser regression now fails offline instead of only in the live E2E.
+const html = readFileSync('sample-post.html', 'utf8');
 
-// --- diagnostic: what lives directly inside a non-empty .replies? ---
-let diagnosed = false;
-$('.replies').each((i, el) => {
-  if (diagnosed) return;
-  const kids = $(el).children().toArray();
-  if (kids.some(k => $(k).hasClass('comment'))) {
-    console.log('DIAG direct children of a populated .replies:',
-      kids.map(k => `${k.tagName}.${($(k).attr('class') || '').trim().split(/\s+/)[0]}`).join(', '));
-    diagnosed = true;
-  }
-});
+// --- real parser against the fixture ---
+const full = parsePostDetails(html, 10_000, 'http://127.0.0.1:8080');
+assert.ok(typeof full.title === 'string' && full.title.length > 0, 'post has a non-empty title');
+assert.ok(typeof full.comments_in_page === 'number' && full.comments_in_page > 0, 'fixture has comments in the DOM');
+assert.ok(Array.isArray(full.comments), 'comments is an array');
+const countNodes = (ns) => ns.reduce((s, n) => s + 1 + (n.replies ? countNodes(n.replies) : 0), 0);
+assert.equal(full.comments_returned, countNodes(full.comments), 'comments_returned equals the real serialized node count (self-consistent)');
+assert.ok(full.comments_returned > 0 && full.comments_returned <= full.comments_in_page, 'returned in (0, in_page]');
 
-// --- recursive comment parser ---
-function parseComment(el) {
-  const $c = $(el);
-  const $right = $c.children('.comment_right');
-  const $summary = $right.children('.comment_data');
-  const $author = $summary.find('a.comment_author').first();
-  const authorClass = $author.attr('class') || '';
-  const scoreTitle = $c.children('.comment_left').find('.comment_score').attr('title') || '';
-  const $replies = $right.children('.replies');
+// --- budget cap: a small budget truncates to exactly the budget ---
+const capped = parsePostDetails(html, 3, 'http://127.0.0.1:8080');
+assert.equal(capped.comments_returned, Math.min(3, full.comments_in_page), 'budget 3 caps the returned count');
 
-  const replies = [];
-  $replies.children('.comment').each((i, child) => replies.push(parseComment(child)));
-
-  return {
-    id: $c.attr('id') || '',
-    author: $author.text().replace(/^u\//, '').trim(),
-    is_op: /\bop\b/.test(authorClass),
-    is_mod: /moderator/.test(authorClass),
-    score: scoreTitle === 'Hidden' || scoreTitle === '' ? null : parseInt(scoreTitle.replace(/,/g, ''), 10),
-    body: $right.children('.comment_body').find('.md').text().trim(),
-    more_replies: $replies.children('a.deeper_replies').length > 0,
-    replies,
-  };
+// --- pruneBFS unit: breadth-first fairness + the truncated flag ---
+const mk = (id, replies = []) => ({ author: id, score: 0, body: id, replies });
+const shape = () => [mk('a', [mk('a1', [mk('a1a')]), mk('a2')]), mk('b'), mk('c')]; // 6 nodes total
+{
+  const { count } = pruneBFS(shape(), 100);
+  assert.equal(count, 6, 'no budget pressure -> all 6 nodes kept');
+}
+{
+  const { kept, count } = pruneBFS(shape(), 3);
+  assert.equal(count, 3, 'budget 3 -> exactly 3 nodes kept');
+  assert.deepEqual(kept.map((n) => n.author).sort(), ['a', 'b', 'c'], 'BFS keeps ALL top-levels before any deep reply');
+  const a = kept.find((n) => n.author === 'a');
+  assert.equal(a.truncated, true, 'a had its replies cut by the budget -> truncated=true');
+  assert.equal(a.replies.length, 0, 'a keeps no replies under the tight budget');
 }
 
-const topLevel = $('.thread > .comment').map((i, el) => parseComment(el)).get();
+// --- nextAfter cursor ---
+assert.equal(nextAfter('foo?after=t3_abc123&x=1'), 't3_abc123', 'extracts the after cursor');
+assert.equal(nextAfter('no cursor here'), null, 'no cursor -> null');
 
-const count = (nodes) => nodes.reduce((s, n) => s + 1 + count(n.replies), 0);
-console.log('top-level comments:', topLevel.length);
-console.log('total comments parsed:', count(topLevel));
-console.log('total .comment in DOM:', $('.comment').length);
-
-// show first thread with a reply, trimmed
-const show = (n, d = 0) => {
-  console.log('  '.repeat(d) + `[${n.score ?? '?'}] u/${n.author}${n.is_op ? ' (OP)' : ''}${n.is_mod ? ' (MOD)' : ''}${n.more_replies ? ' [+more]' : ''}: ${n.body.slice(0, 70)}`);
-  n.replies.forEach(r => show(r, d + 1));
-};
-console.log('\n--- sample (first 2 threads) ---');
-topLevel.slice(0, 2).forEach(t => show(t));
+console.log('ALL PASS');
