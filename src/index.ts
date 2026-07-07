@@ -322,9 +322,15 @@ async function main() {
     const { randomUUID } = await import("node:crypto");
     const http = await import("http");
 
+    const PORT = parseInt(process.env.PORT || "3000", 10);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
-      onsessioninitialized: (sid: string) => console.error(`Session initialized: ${sid}`)
+      onsessioninitialized: (sid: string) => console.error(`Session initialized: ${sid}`),
+      // Reject Host headers that aren't our loopback bind. Loopback binding alone does NOT stop DNS
+      // rebinding (a malicious page resolving a hostname to 127.0.0.1 and driving this endpoint); the
+      // SDK defaults this protection OFF, so set it explicitly.
+      enableDnsRebindingProtection: true,
+      allowedHosts: [`127.0.0.1:${PORT}`, `localhost:${PORT}`],
     });
     await server.connect(transport);
 
@@ -336,7 +342,6 @@ async function main() {
       if (req.url === "/mcp") { transport.handleRequest(req, res); }
       else { res.writeHead(404).end("Not found"); }
     });
-    const PORT = parseInt(process.env.PORT || "3000", 10);
     if (!HTTP_TOKEN) console.error("WARNING: USE_HTTP without REDLIB_MCP_TOKEN — bound to loopback but unauthenticated.");
     httpServer.listen(PORT, "127.0.0.1", () => console.error(`Redlib MCP Server on http://127.0.0.1:${PORT}/mcp`));
   } else {

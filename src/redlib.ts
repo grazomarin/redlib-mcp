@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, rmSync, statSync } from "node:fs";
 import { arch as osArch } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { REDLIB_PIN } from "./pin.js";
 
 export type RunResult = { stdout: string; stderr: string; code: number };
@@ -55,7 +55,10 @@ export async function detectEngine(
   // Explicit override: an ABSOLUTE path the operator vouches for — NOT bare-PATH resolution (spec §8).
   const override = env.REDLIB_ENGINE;
   if (override) {
-    if (!override.includes("/") && !override.includes("\\")) throw new Error(`REDLIB_ENGINE must be an ABSOLUTE path to a docker/podman binary, not a bare name: ${override}`);
+    // ABSOLUTE only: a bare name PATH-resolves, and a relative name (e.g. "./docker") resolves against
+    // the process CWD — both are the binary-hijack surface this rule exists to close. isAbsolute covers
+    // POSIX "/…", Windows "C:\…", and UNC paths; a leading "./" or "../" is correctly rejected.
+    if (!isAbsolute(override)) throw new Error(`REDLIB_ENGINE must be an ABSOLUTE path to a docker/podman binary, not a bare or relative name: ${override}`);
     const r = await run(override, ["version", "--format", "{{.Client.Version}}"]).catch(() => ({ stdout: "", stderr: "spawn failed", code: 127 }));
     if (r.code === 0) return { bin: override, kind: /podman/i.test(override) ? "podman" : "docker" };
     throw new Error(`REDLIB_ENGINE=${override} did not respond to \`version\`.`);
@@ -91,6 +94,10 @@ async function ok(r: RunResult, label: string): Promise<RunResult> {
 // force-moved remote can't slip an unpinned tree past this (spec §6.1).
 export async function cloneAtPin(dir: string, run: Runner = defaultRunner, pin = REDLIB_PIN): Promise<void> {
   mkdirSync(dir, { recursive: true });
+  // git is resolved via PATH (unlike the container engine, which is absolute-only). Hardening git to
+  // fixed absolute paths is impractical — it lives in many locations across OSes and users expect PATH
+  // git — and the threat it would add (a malicious `git` earlier in PATH) already implies shell
+  // compromise. Accepted tradeoff; the HEAD == pin.sha assertion below is the real supply-chain guard.
   const git = (args: string[], opts?: { timeoutMs?: number }) => run("git", ["-C", dir, ...args], opts);
   if (!existsSync(join(dir, ".git"))) {
     await ok(await run("git", ["init", "-q", dir]), "git init");

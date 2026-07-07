@@ -45,6 +45,7 @@ const existsAll = () => true; // pretend the absolute candidate paths are on dis
   const e = await detectEngine(run, { REDLIB_ENGINE: '/custom/bin/docker' }, existsAll);
   assert.equal(e.bin, '/custom/bin/docker', 'absolute override honored');
   await assert.rejects(() => detectEngine(run, { REDLIB_ENGINE: 'docker' }, existsAll), /absolute/i, 'bare-name override rejected');
+  await assert.rejects(() => detectEngine(run, { REDLIB_ENGINE: './docker' }, existsAll), /absolute|relative/i, 'RELATIVE override (./docker) rejected — a slash alone is not "absolute"');
 }
 // containerIdOnPort: a FAILED `ps` (exit != 0) must THROW, not return null — else setup's clean-install
 // branch would `rm -f` a live backend + bind an unverified image on a transient engine hiccup.
