@@ -11,6 +11,7 @@ export class RedlibBackend implements Backend {
     private baseUrl = resolveRedlibUrl(),        // validated; throws on a bad REDLIB_URL
     private minAcquire: () => Promise<void> = async () => {},
     private timeoutMs = 15000,
+    private fetchImpl: typeof fetchFn = fetchFn,  // injectable so retry/timeout/content-type paths are unit-testable
   ) {}
   async fetch(path: string): Promise<string> {
     await this.minAcquire();
@@ -21,7 +22,7 @@ export class RedlibBackend implements Backend {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
       try {
-        const res = await fetchFn(url, { signal: ctrl.signal as any });
+        const res = await this.fetchImpl(url, { signal: ctrl.signal as any });
         clearTimeout(timer);
         if (res.ok) {
           const ct = res.headers.get("content-type") || "";
