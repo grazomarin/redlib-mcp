@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { RedlibBackend } from "./backend/redlib.js";
 import { resolveRedlibUrl } from "./config.js";
-import { assertRedlibContent, RedlibError } from "./errors.js";
+import { assertContentLoaded, RedlibError } from "./errors.js";
 
 export type SwapDecision = "promote" | "discard" | "defer";
 
@@ -30,8 +30,9 @@ export async function verifyCandidate(
     const isLast = attempt === retries - 1;
     try {
       const html = await makeBackend(probeUrl).fetch(path);
-      assertRedlibContent(html); // throws RedlibError PARSE_ERROR on a 200 error/info page (shell check)
-      const posts = cheerio.load(html)(".post").length; // the REAL parser selector (index.ts parsePostList)
+      const $ = cheerio.load(html);      // load ONCE — the assert and the .post count share it
+      assertContentLoaded($);            // throws RedlibError PARSE_ERROR on a 200 error/info page (shell check)
+      const posts = $(".post").length;   // the REAL parser selector (index.ts parsePostList)
       if (posts === 0) throw new RedlibError("PARSE_ERROR", "candidate served 0 parseable posts on a populated sub — stale spoofing or parser drift");
       return { decision: "promote", lastKind: "VALID", detail: `candidate served ${posts} parseable posts` };
     } catch (e: any) {

@@ -55,8 +55,12 @@ export function classifyRedlib(status: number, bodyText: string): RedlibErrorKin
 // error() and info() pages render <div id="error"> and NEVER #column_one. Verified against
 // Redlib templates (error.html, info.html, search.html, user.html, post.html). This guards the
 // silent-empty case: a 200 info/drift page must be PARSE_ERROR, not "ok_no_results".
-export function assertRedlibContent(html: string): void {
-  const $ = cheerio.load(html);
+export function assertContentLoaded($: cheerio.CheerioAPI): void {
   if ($('#error').length > 0) throw new RedlibError("PARSE_ERROR", "Redlib returned an error/info page (HTTP 200), not content");
   if ($('#column_one').length === 0) throw new RedlibError("PARSE_ERROR", "Redlib 200 response missing content shell (#column_one) — likely drift or a non-content page");
+}
+// Wrapper for callers that only hold the html string. The parsers in parse.ts take the already-loaded
+// `$` via assertContentLoaded so a request does ONE cheerio.load, not one to assert + one to parse.
+export function assertRedlibContent(html: string): void {
+  assertContentLoaded(cheerio.load(html));
 }

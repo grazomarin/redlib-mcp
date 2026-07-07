@@ -1,8 +1,10 @@
 import * as cheerio from "cheerio";
+import { assertContentLoaded } from "./errors.js";
 
 // Pure Redlib-HTML -> compact-JSON parsers, extracted from index.ts so they are unit-testable
 // (importing index.ts starts the MCP server as a side effect). No I/O, no globals — the post-media
-// base URL is passed in.
+// base URL is passed in. Each parser loads cheerio ONCE and asserts content on that same $ (callers
+// no longer pre-call assertRedlibContent — that would be a second full parse of the same html).
 
 export const COMMENT_BODY_CAP = 1200;
 
@@ -24,6 +26,7 @@ export function cleanTitle($titleEl: cheerio.Cheerio<any>): string {
 // permalink is the canonical reddit.com URL so the agent can cite it.
 export function parsePostList(html: string) {
   const $ = cheerio.load(html);
+  assertContentLoaded($);
   const results: Array<Record<string, unknown>> = [];
   $(".post").each((_i, el) => {
     const $el = $(el);
@@ -139,6 +142,7 @@ export function pruneBFS(roots: CommentNode[], budget: number): { kept: CommentN
 
 export function parsePostDetails(html: string, maxComments: number, baseUrl: string) {
   const $ = cheerio.load(html);
+  assertContentLoaded($);
   const roots = $(".thread > .comment").map((_i, el) => buildComment($, el)).get() as CommentNode[];
   const { kept, count } = pruneBFS(roots, maxComments);
 
