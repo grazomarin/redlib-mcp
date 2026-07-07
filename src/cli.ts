@@ -10,7 +10,11 @@ import { REDLIB_PIN } from "./pin.js";
 import { mergeServer, writeAtomic, diffLines, type ServerEntry } from "./config-write.js";
 import { readFileSync, existsSync } from "node:fs";
 import { createInterface } from "node:readline";
+import { createRequire } from "node:module";
 
+// Single source of truth for the version: read package.json at runtime so a release bump in ONE place
+// flows to both the emitted client-config entry AND the MCP handshake — no hand-synced "1.0.0" literals.
+const VERSION: string = createRequire(import.meta.url)("../package.json").version;
 const CONTAINER_NAME = "redlib-mcp";
 const DEFAULT_PORT = 8080;
 
@@ -92,13 +96,15 @@ async function cmdDoctor(): Promise<number> {
   return exitCode;
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   say(
     "redlib-mcp — read public Reddit via a self-hosted Redlib backend.\n" +
     "  redlib-mcp serve             run the MCP stdio server\n" +
     "  redlib-mcp setup             build + start the Redlib backend, register the MCP\n" +
     "  redlib-mcp update            rebuild at the pinned commit; promote only if verified\n" +
-    "  redlib-mcp doctor            diagnose engine/container/health and print fixes",
+    "  redlib-mcp doctor            diagnose engine/container/health and print fixes\n" +
+    "\nsetup flags: --yes (write the client config without an interactive prompt — for agents,\n" +
+    "             which have no TTY), --print-only (show the diff, don't write), --port <n>, --non-loopback",
   );
 }
 
@@ -168,7 +174,7 @@ function withSetupDefaults(deps?: Partial<SetupDeps>): SetupDeps {
     verifyCandidate: (url) => verifyCandidate(url),
     withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds (spec §8)
     resolveClientConfig: () => process.env.REDLIB_MCP_CLIENT_CONFIG || "",
-    version: "1.0.0",
+    version: VERSION,
     ...deps,
   };
 }

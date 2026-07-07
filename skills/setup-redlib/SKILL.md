@@ -15,13 +15,15 @@ self-hosted Redlib backend. This skill installs and heals that backend via the `
    it to `127.0.0.1:8080`, and verifies it end to end):
 
    ```bash
-   npx -y redlib-mcp@1.0.0 setup
+   REDLIB_MCP_CLIENT_CONFIG=<this agent's client config path> npx -y redlib-mcp@1.0.0 setup --yes
    ```
 
-   Set `REDLIB_MCP_CLIENT_CONFIG=<path>` (the env var the CLI reads) to THIS agent's own client
-   config file so `setup` can register the MCP into it. `setup` prints the diff and asks before
-   writing; approve it. (Without a config path, `setup` still succeeds — it just skips registration,
-   and you add the server entry yourself.)
+   Set `REDLIB_MCP_CLIENT_CONFIG` (the env var the CLI reads) to THIS agent's own client config file
+   so `setup` registers the MCP into it. Pass `--yes` so the write happens without a prompt: an agent
+   has no TTY, and WITHOUT `--yes` setup prints the diff and then SKIPS the write (it still exits 0, so
+   nothing signals the skip). Use `--print-only` first if you want to preview the diff without writing.
+   (Without a config path, `setup` still succeeds — it just skips registration and you add the server
+   entry yourself.)
 
 2. Confirm the server is registered in your client config, pointing at `redlib-mcp@1.0.0 serve`
    (an exact version — never a floating `npx redlib-mcp`).

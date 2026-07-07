@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Single bin: dispatch server-vs-CLI. serve / piped-stdin -> MCP stdio server;
-// setup|update|doctor -> CLI (stub until Plan 2); bare TTY -> help.
+// setup|update|doctor -> CLI; bare TTY / unknown command -> the shared help owned by cli.ts.
 const CLI_COMMANDS = new Set(["setup", "update", "doctor"]);
 
 async function main() {
@@ -16,13 +16,10 @@ async function main() {
     process.exitCode = await run(argv);
     return;
   }
-  // help (bare TTY or unknown command) — stderr, so stdout stays clean for pipes.
-  console.error(
-    "redlib-mcp — read public Reddit via a self-hosted Redlib backend.\n" +
-    "  redlib-mcp serve             run the MCP stdio server\n" +
-    "  redlib-mcp setup             install/repair the Redlib backend (Plan 2)\n" +
-    "  redlib-mcp update|doctor     manage/diagnose the backend (Plan 2)\n"
-  );
+  // help (bare TTY or unknown command) — ONE help string, owned by cli.ts printHelp (on stderr, so
+  // stdout stays clean for pipes).
+  const { printHelp } = await import("./cli.js");
+  printHelp();
   if (cmd) process.exitCode = 2; // a command was given but unrecognized; bare help stays exit 0
 }
 main().catch((e) => { console.error("Fatal:", e); process.exit(1); });
