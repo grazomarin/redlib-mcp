@@ -184,7 +184,7 @@ export async function waitHealthy(
 ): Promise<boolean> {
   const tries = opts.tries ?? 60;
   const delayMs = opts.delayMs ?? 1000;
-  const fetchFn = opts.fetchFn ?? ((u: string) => fetch(u) as unknown as Promise<{ ok: boolean }>);
+  const fetchFn = opts.fetchFn ?? ((u: string) => fetch(u)); // global fetch's Response already has `ok`
   for (let i = 0; i < tries; i++) {
     try { if ((await fetchFn(`${url}/settings`)).ok) return true; } catch { /* not up yet */ }
     await new Promise((r) => setTimeout(r, delayMs));
@@ -208,7 +208,13 @@ export async function withBuildLock<T>(lockPath: string, fn: () => Promise<T>, o
       const age = Math.max(0, Date.now() - statSync(lockPath).mtimeMs);
       if (age < staleMs) throw new Error(`A Redlib build is already in progress (lock: ${lockPath}). Wait for it to finish, or delete the lock if it is stale.`);
       rmSync(lockPath, { force: true });               // reclaim a crashed build's stale lock
-      return openSync(lockPath, "wx");
+      try { return openSync(lockPath, "wx"); }
+      catch (e2: any) {
+        // Lost a race to reclaim the SAME stale lock (another process re-created it first). Surface the
+        // friendly in-progress message instead of letting a raw EEXIST escape withBuildLock.
+        if (e2?.code === "EEXIST") throw new Error(`A Redlib build is already in progress (lock: ${lockPath}).`);
+        throw e2;
+      }
     }
   };
   const fd = acquire();

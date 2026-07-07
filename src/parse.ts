@@ -10,7 +10,7 @@ export const COMMENT_BODY_CAP = 1200;
 
 export function exactScore($el: cheerio.Cheerio<any>): number | null {
   const title = ($el.attr("title") || "").trim();
-  if (title && title !== "Hidden") return parseInt(title.replace(/,/g, ""), 10);
+  if (title && title !== "Hidden") { const t = parseInt(title.replace(/,/g, ""), 10); return Number.isNaN(t) ? null : t; }
   const text = $el.text().trim().replace(/,/g, "");
   const n = parseInt(text, 10);
   return Number.isNaN(n) ? null : n;

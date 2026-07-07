@@ -17,6 +17,8 @@ import { createRequire } from "node:module";
 const VERSION: string = createRequire(import.meta.url)("../package.json").version;
 const CONTAINER_NAME = "redlib-mcp";
 const DEFAULT_PORT = 8080;
+const IMAGE = "localhost/redlib:latest";        // the promoted, live image tag
+const BUILD_TAG = "localhost/redlib:building";  // the unpromoted candidate tag (verify-before-swap)
 
 // Everything human-facing goes to STDERR. CLI mode does not share serve mode's stdout-purity rule,
 // but keeping logs on stderr means `redlib-mcp doctor >x` stays clean and pipeable.
@@ -68,7 +70,7 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
         : "Transient (Reddit throttling or upstream token-stale). If it persists at the current pin, upstream Redlib has no fix yet — not your setup; wait/watch redlib-org.",
   });
 
-  const [want, got] = [deps.hostArch(), await deps.imageArch(engine, "localhost/redlib:latest")];
+  const [want, got] = [deps.hostArch(), await deps.imageArch(engine, IMAGE)];
   out.push({ check: "image arch", ok: !got || got === want, detail: got ? `${got} (host ${want})` : "unknown", fix: got && got !== want ? `Built image is ${got} but host is ${want} (emulated/slow) — rebuild with \`redlib-mcp update\`.` : undefined });
   return out;
 }
@@ -107,8 +109,6 @@ export function printHelp(): void {
     "             which have no TTY), --print-only (show the diff, don't write), --port <n>, --non-loopback",
   );
 }
-
-const IMAGE = "localhost/redlib:latest";
 
 // The candidate verify-before-swap sequence shared by setup's re-setup branch and update: run the
 // freshly-built candidate on a temp port, verify it, and apply the ONE correct image op per decision —
@@ -220,7 +220,7 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
   if (host === "0.0.0.0") say("WARNING: --non-loopback exposes an UNAUTHENTICATED Redlib to your LAN (Docker bypasses host firewalls). See spec §6.4.");
 
   const alreadyRunning = await d.containerIdOnPort(engine, port);
-  const buildTag = alreadyRunning ? "localhost/redlib:building" : IMAGE;
+  const buildTag = alreadyRunning ? BUILD_TAG : IMAGE;
   const dir = cloneDir();
   // Clone + build inside the build lock so a concurrent setup/update can't stack a second Rust compile.
   await d.withBuildLock(async () => {
@@ -299,7 +299,7 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
   if (!(await d.daemonReachable(engine))) { say("daemon not reachable; start it and re-run."); return 3; }
 
   const dir = cloneDir();
-  const buildTag = "localhost/redlib:building";
+  const buildTag = BUILD_TAG;
   // Clone + build inside the build lock so a concurrent setup/update can't stack a second Rust compile.
   await d.withBuildLock(async () => {
     say(`rebuilding Redlib at pinned ${REDLIB_PIN.ref}@${REDLIB_PIN.sha.slice(0, 12)}`);

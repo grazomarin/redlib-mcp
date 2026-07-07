@@ -20,6 +20,13 @@ import { mergeServer, writeAtomic } from './dist/config-write.js';
   const { obj } = mergeServer(jsonc, 'redlib-mcp', { command: 'c', args: ['serve'] });
   assert.ok(obj.mcpServers.a && obj.mcpServers['redlib-mcp'], 'JSONC merged');
 }
+// a VALID JSON value containing comment-like text (/* */ or //) inside a STRING must NOT be mangled
+// by the JSONC comment-stripper (raw JSON is parsed first, strip is only a fallback).
+{
+  const existing = JSON.stringify({ mcpServers: { keep: { command: 'node', args: ['--flag=/* not a comment */', 'http://x//y'] } } });
+  const { obj } = mergeServer(existing, 'redlib-mcp', { command: 'c', args: ['serve'] });
+  assert.deepEqual(obj.mcpServers.keep.args, ['--flag=/* not a comment */', 'http://x//y'], 'string values with /* */ and // survive untouched');
+}
 // empty / missing file -> a fresh config, not a crash.
 {
   const { obj } = mergeServer('', 'redlib-mcp', { command: 'c', args: ['serve'] });

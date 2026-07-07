@@ -43,7 +43,7 @@ server.tool(
     subreddit: z.string().optional().describe("Limit search to a specific subreddit"),
     sort: z.enum(["relevance", "hot", "top", "new", "comments"]).optional().describe("Default relevance"),
     time: z.enum(["hour", "day", "week", "month", "year", "all"]).optional().describe("Time window (for sort=top)"),
-    limit: z.number().optional().describe("Max posts (default 25)"),
+    limit: z.number().optional().describe("Max posts to return; omitted uses the backend's default page size"),
   },
   async ({ query, subreddit, sort, time, limit }) => {
     try {
@@ -68,7 +68,7 @@ server.tool(
     subreddit: z.string().describe("Subreddit name (without r/)"),
     sort: z.enum(["hot", "top", "new", "rising"]).optional().describe("Default hot"),
     time: z.enum(["hour", "day", "week", "month", "year", "all"]).optional().describe("Time window (for sort=top)"),
-    limit: z.number().optional().describe("Number of posts (default 25)"),
+    limit: z.number().optional().describe("Number of posts; omitted uses the backend's default page size"),
     after: z.string().optional().describe("Pagination cursor from a previous call's next_after"),
   },
   async ({ subreddit, sort, time, limit, after }) => {

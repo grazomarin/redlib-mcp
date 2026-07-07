@@ -24,8 +24,14 @@ export function mergeServer(
 ): { obj: any; text: string } {
   let obj: any = {};
   if (existingText.trim()) {
-    try { obj = JSON.parse(stripJsonc(existingText)); }
-    catch { throw new Error("Existing client config is not valid JSON/JSONC — refusing to overwrite it. Fix or move it, then re-run."); }
+    // Parse the RAW text first — a valid JSON config must never go through the comment-stripping regex
+    // (it is string-unaware and could mangle a "/* */" or "//" inside a string VALUE, then still parse,
+    // silently corrupting a sibling). Only strip JSONC comments if the raw parse fails (a real .jsonc).
+    try { obj = JSON.parse(existingText); }
+    catch {
+      try { obj = JSON.parse(stripJsonc(existingText)); }
+      catch { throw new Error("Existing client config is not valid JSON/JSONC — refusing to overwrite it. Fix or move it, then re-run."); }
+    }
     if (typeof obj !== "object" || obj === null) throw new Error("Existing client config is not a JSON object — refusing to overwrite.");
   }
   obj[key] = obj[key] && typeof obj[key] === "object" ? obj[key] : {};

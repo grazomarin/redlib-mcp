@@ -22,6 +22,9 @@ export class RedlibBackend implements Backend {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
       try {
+        // `as any` bridges the DOM AbortSignal (global AbortController) to node-fetch's signal type;
+        // we keep node-fetch (not native fetch) because it surfaces ECONNREFUSED as e.code, which the
+        // catch below relies on — native fetch buries it under e.cause.
         const res = await this.fetchImpl(url, { signal: ctrl.signal as any });
         clearTimeout(timer);
         if (res.ok) {
