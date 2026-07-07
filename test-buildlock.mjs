@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { existsSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { withBuildLock } from './dist/redlib.js';
+import { withBuildLock } from './dist/engine.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'lock-'));
 const lock = join(dir, 'build.lock');

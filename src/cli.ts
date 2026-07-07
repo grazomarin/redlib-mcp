@@ -2,7 +2,7 @@ import {
   detectEngine, daemonReachable, containerIdOnPort, waitHealthy, hostArch, imageArch,
   cloneAtPin, buildImage, runContainer, stopContainer, tagImage, removeImage, withBuildLock,
   type Engine,
-} from "./redlib.js";
+} from "./engine.js";
 import { verifyCandidate } from "./verify.js";
 import { resolveRedlibUrl } from "./config.js";
 import { cloneDir, buildLockPath } from "./paths.js";

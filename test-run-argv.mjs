@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { runContainer, waitHealthy, containerIdOnPort } from './dist/redlib.js';
+import { runContainer, waitHealthy, containerIdOnPort } from './dist/engine.js';
 
 function recorder(results = {}) {
   const calls = [];

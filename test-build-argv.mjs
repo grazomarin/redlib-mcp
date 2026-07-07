@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { join } from 'node:path';
-import { cloneAtPin, buildImage, hostArch } from './dist/redlib.js';
+import { cloneAtPin, buildImage, hostArch } from './dist/engine.js';
 import { REDLIB_PIN } from './dist/pin.js';
 
 // Assert the EXACT argv the engine/git receives — the value is that no `sh -c` and the pinned SHA

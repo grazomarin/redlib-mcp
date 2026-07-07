@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { detectEngine, containerIdOnPort } from './dist/redlib.js';
+import { detectEngine, containerIdOnPort } from './dist/engine.js';
 
 // A mock Runner records calls and returns scripted results by binary NAME — so we test resolution
 // logic without a real docker/podman. `version` is how we distinguish a working engine (spec §8).
