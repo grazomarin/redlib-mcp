@@ -110,6 +110,34 @@ export function printHelp(): void {
 
 const IMAGE = "localhost/redlib:latest";
 
+// The candidate verify-before-swap sequence shared by setup's re-setup branch and update: run the
+// freshly-built candidate on a temp port, verify it, and apply the ONE correct image op per decision —
+// promote: tag :latest + drop the build tag; discard: drop the build tag (broken build); defer: KEEP
+// the candidate image unpromoted (the op we must NOT do — deleting it wastes the build and breaks
+// re-verify). One home keeps this correctness-critical invariant from drifting between the two callers.
+interface SwapDeps {
+  stopContainer: (e: Engine, name: string) => Promise<void>;
+  runContainer: (e: Engine, o: { image: string; name: string; port: number; host?: string; restart?: boolean }) => Promise<void>;
+  waitHealthy: (url: string) => Promise<boolean>;
+  verifyCandidate: (url: string) => Promise<{ decision: string; lastKind: string; detail: string }>;
+  tagImage: (e: Engine, from: string, to: string) => Promise<void>;
+  removeImage: (e: Engine, tag: string) => Promise<void>;
+}
+async function verifyBeforeSwap(engine: Engine, d: SwapDeps, buildTag: string, tmpPort: number): Promise<{ decision: string; lastKind: string; detail: string }> {
+  const tmpName = `${CONTAINER_NAME}-candidate`;
+  await d.stopContainer(engine, tmpName);
+  await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1", restart: false });
+  const tmpUrl = `http://127.0.0.1:${tmpPort}`;
+  const v = (await d.waitHealthy(tmpUrl))
+    ? await d.verifyCandidate(tmpUrl)
+    : { decision: "defer", lastKind: "REDLIB_DOWN", detail: "candidate never healthy" };
+  await d.stopContainer(engine, tmpName);
+  if (v.decision === "promote") { await d.tagImage(engine, buildTag, IMAGE); await d.removeImage(engine, buildTag); }
+  else if (v.decision === "discard") { await d.removeImage(engine, buildTag); } // broken build — throw the candidate away
+  // defer: intentionally KEEP buildTag unpromoted for a later re-verify — the one image op we must NOT do.
+  return v;
+}
+
 // Tiny hand-rolled flag parser (spec §14: no arg-parsing dependency; keeps cold-start light).
 // Supports `--flag`, `--key value`, `--key=value`. Unknown flags are tolerated (forward-compat).
 export function parseFlags(argv: string[]): Record<string, string | boolean> {
@@ -217,25 +245,10 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
     say("verified: serving valid content.");
   } else {
     // Re-setup/repair with a live service: verify the candidate on a TEMP port before swapping.
-    const tmpPort = port + 1;
-    const tmpName = `${CONTAINER_NAME}-candidate`;
-    await d.stopContainer(engine, tmpName);
-    await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1", restart: false });
-    const tmpUrl = `http://127.0.0.1:${tmpPort}`;
-    const healthy = await d.waitHealthy(tmpUrl);
-    const v = healthy ? await d.verifyCandidate(tmpUrl) : { decision: "defer", lastKind: "REDLIB_DOWN", detail: "candidate never healthy" };
-    await d.stopContainer(engine, tmpName);
-    if (v.decision === "promote") {
-      await d.tagImage(engine, buildTag, IMAGE);
-      await d.removeImage(engine, buildTag);
-      say("candidate verified and promoted to :latest. Restart the container to pick it up (or it will on next restart).");
-    } else if (v.decision === "discard") {
-      await d.removeImage(engine, buildTag); // broken build — throw the candidate away
-      say(`candidate DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`); return 5;
-    } else {
-      // defer: KEEP the candidate image unpromoted for re-verification (spec §5.2) — do NOT removeImage.
-      say(`candidate inconclusive (${v.lastKind}): ${v.detail}. Kept the current image serving; candidate retained as ${buildTag}. Re-run \`redlib-mcp update\` later to re-verify.`); return 6;
-    }
+    const v = await verifyBeforeSwap(engine, d, buildTag, port + 1);
+    if (v.decision === "promote") say("candidate verified and promoted to :latest. Restart the container to pick it up (or it will on next restart).");
+    else if (v.decision === "discard") { say(`candidate DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`); return 5; }
+    else { say(`candidate inconclusive (${v.lastKind}): ${v.detail}. Kept the current image serving; candidate retained as ${buildTag}. Re-run \`redlib-mcp update\` later to re-verify.`); return 6; }
   }
 
   // Register the MCP into the caller's client config (atomic, diff + confirm) — spec §5.2 step 6.
@@ -294,29 +307,11 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
     await d.buildImage(dir, buildTag, engine);
   });
 
-  const tmpPort = DEFAULT_PORT + 1;
-  const tmpName = `${CONTAINER_NAME}-candidate`;
-  await d.stopContainer(engine, tmpName);
-  await d.runContainer(engine, { image: buildTag, name: tmpName, port: tmpPort, host: "127.0.0.1", restart: false });
-  const tmpUrl = `http://127.0.0.1:${tmpPort}`;
-  const healthy = await d.waitHealthy(tmpUrl);
-  const v = healthy ? await d.verifyCandidate(tmpUrl) : { decision: "defer", lastKind: "REDLIB_DOWN", detail: "candidate never healthy" };
-  await d.stopContainer(engine, tmpName);
-
-  if (v.decision === "promote") {
-    await d.tagImage(engine, buildTag, IMAGE);
-    await d.removeImage(engine, buildTag);
-    say("update verified and promoted to :latest. Restart the container to apply.");
-    return 0;
-  }
-  if (v.decision === "discard") {
-    await d.removeImage(engine, buildTag); // broken build/parse — throw the candidate away
-    say(`update DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`);
-    return 5;
-  }
-  // defer: inconclusive — KEEP the candidate image unpromoted for later re-verification (spec §5.2
-  // update bullet: "keep old serving, keep the new image unpromoted, tell the user to re-verify
-  // later"). Do NOT removeImage here — deleting it would waste the long build and break the re-verify path.
+  const v = await verifyBeforeSwap(engine, d, buildTag, DEFAULT_PORT + 1);
+  if (v.decision === "promote") { say("update verified and promoted to :latest. Restart the container to apply."); return 0; }
+  if (v.decision === "discard") { say(`update DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`); return 5; }
+  // defer: inconclusive — verifyBeforeSwap kept the candidate image unpromoted; do NOT delete it (that
+  // would waste the long build and break the re-verify path).
   say(`update inconclusive (${v.lastKind}): ${v.detail}. Kept the current image serving; the new candidate is retained as ${buildTag} — re-run \`redlib-mcp update\` later to re-verify. If it persists at this pin, upstream Redlib has no fix yet — not your setup.`);
   return 6;
 }
