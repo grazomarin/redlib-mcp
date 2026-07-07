@@ -42,7 +42,9 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
   out.push({ check: "daemon", ok: daemon, detail: daemon ? "reachable" : "unreachable", fix: daemon ? undefined : "Start Docker Desktop / the Docker daemon (mac/Win: check 'launch at login')." });
   if (!daemon) return out;
 
-  const id = await deps.containerIdOnPort(engine, DEFAULT_PORT);
+  let id: string | null;
+  try { id = await deps.containerIdOnPort(engine, DEFAULT_PORT); }
+  catch (e: any) { out.push({ check: `container on :${DEFAULT_PORT}`, ok: false, detail: `engine query failed: ${e?.message || e}`, fix: "The container engine errored on `ps` — check it is healthy, then re-run." }); return out; }
   out.push({ check: `container on :${DEFAULT_PORT}`, ok: !!id, detail: id ? `running (${id})` : "not running", fix: id ? undefined : "Run `redlib-mcp setup` to build and start the Redlib backend." });
   if (!id) return out;
 

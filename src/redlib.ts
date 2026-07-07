@@ -16,10 +16,13 @@ export type Runner = (
 export const defaultRunner: Runner = (file, args, opts = {}) =>
   new Promise<RunResult>((resolve) => {
     const child = spawn(file, args, { cwd: opts.cwd, shell: false });
+    // Retain only a bounded TAIL: a 20-min build streams MBs live, but callers only ever read
+    // slice(-2000)/slice(-600). Trim when we exceed 2×CAP so buffering stays O(n), not unbounded.
+    const CAP = 64 * 1024;
     let stdout = "", stderr = "";
     const timer = opts.timeoutMs ? setTimeout(() => child.kill("SIGKILL"), opts.timeoutMs) : null;
-    child.stdout.on("data", (d) => { stdout += d; });
-    child.stderr.on("data", (d) => { stderr += d; if (opts.stream) process.stderr.write(d); });
+    child.stdout.on("data", (d) => { stdout += d; if (stdout.length > 2 * CAP) stdout = stdout.slice(-CAP); });
+    child.stderr.on("data", (d) => { stderr += d; if (stderr.length > 2 * CAP) stderr = stderr.slice(-CAP); if (opts.stream) process.stderr.write(d); });
     child.on("error", (e) => { if (timer) clearTimeout(timer); resolve({ stdout, stderr: stderr + String(e), code: 127 }); });
     child.on("close", (code) => { if (timer) clearTimeout(timer); resolve({ stdout, stderr, code: code ?? 1 }); });
   });
@@ -93,9 +96,12 @@ export async function cloneAtPin(dir: string, run: Runner = defaultRunner, pin =
     await ok(await run("git", ["init", "-q", dir]), "git init");
     await ok(await git(["remote", "add", "origin", pin.repo]), "git remote add");
   }
-  const byShaFetch = await git(["fetch", "--depth", "1", "origin", pin.sha]);
+  // Network fetches get a timeout: a stalled network must not hang FOREVER while holding the build
+  // lock (stale-reclaim only rescues a DEAD holder, not a hung-but-alive one).
+  const NET = { timeoutMs: 180_000 };
+  const byShaFetch = await git(["fetch", "--depth", "1", "origin", pin.sha], NET);
   if (byShaFetch.code !== 0) {
-    await ok(await git(["fetch", "origin", pin.ref]), "git fetch (fallback by ref)");
+    await ok(await git(["fetch", "origin", pin.ref], NET), "git fetch (fallback by ref)");
   }
   await ok(await git(["checkout", "-q", "--detach", pin.sha]), "git checkout pinned SHA");
   const head = (await ok(await git(["rev-parse", "HEAD"]), "git rev-parse")).stdout.trim();
@@ -148,6 +154,9 @@ export async function stopContainer(engine: Engine, name: string, run: Runner = 
 // The container id publishing `port` on the host, or null. Used to detect "already running on :8080".
 export async function containerIdOnPort(engine: Engine, port: number, run: Runner = defaultRunner): Promise<string | null> {
   const r = await run(engine.bin, ["ps", "--filter", `publish=${port}`, "--format", "{{.ID}}"]);
+  // A FAILED `ps` (exit != 0) is NOT "no container": returning null there would let setup's clean-install
+  // branch `rm -f` a live container and bind an unverified image on a transient engine hiccup. Fail loudly.
+  if (r.code !== 0) throw new Error(`\`${engine.kind} ps\` failed (exit ${r.code}): ${(r.stderr || r.stdout).slice(-200)}`);
   const id = r.stdout.trim().split(/\s+/).filter(Boolean)[0];
   return id || null;
 }

@@ -24,6 +24,9 @@ function recorder(results = {}) {
   const argvs = calls.map(c => `${c.file} ${c.args.join(' ')}`);
   assert.ok(argvs.some(a => a.startsWith('git') && a.includes('fetch') && a.includes(REDLIB_PIN.sha)), 'must fetch the pinned SHA: ' + argvs.join(' | '));
   assert.ok(argvs.some(a => a.includes('checkout') && a.includes(REDLIB_PIN.sha)), 'must checkout the pinned SHA');
+  // network fetches must carry a timeout so a stalled network can't hang while holding the build lock
+  const fetchCall = calls.find(c => c.args.includes('fetch'));
+  assert.ok(fetchCall && fetchCall.opts && fetchCall.opts.timeoutMs > 0, 'git fetch must pass a network timeoutMs');
 }
 // clone: a HEAD that does NOT match the pin is refused (immutability guarantee).
 {

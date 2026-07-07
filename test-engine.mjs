@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { detectEngine } from './dist/redlib.js';
+import { detectEngine, containerIdOnPort } from './dist/redlib.js';
 
 // A mock Runner records calls and returns scripted results by binary NAME — so we test resolution
 // logic without a real docker/podman. `version` is how we distinguish a working engine (spec §8).
@@ -45,5 +45,13 @@ const existsAll = () => true; // pretend the absolute candidate paths are on dis
   const e = await detectEngine(run, { REDLIB_ENGINE: '/custom/bin/docker' }, existsAll);
   assert.equal(e.bin, '/custom/bin/docker', 'absolute override honored');
   await assert.rejects(() => detectEngine(run, { REDLIB_ENGINE: 'docker' }, existsAll), /absolute/i, 'bare-name override rejected');
+}
+// containerIdOnPort: a FAILED `ps` (exit != 0) must THROW, not return null — else setup's clean-install
+// branch would `rm -f` a live backend + bind an unverified image on a transient engine hiccup.
+{
+  const eng = { bin: 'docker', kind: 'docker' };
+  await assert.rejects(() => containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: 'daemon busy', code: 1 })), /ps.*failed/i, 'ps failure must throw, not return null');
+  assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: 'abc123\n', stderr: '', code: 0 })), 'abc123', 'running container id returned on success');
+  assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: '', code: 0 })), null, 'no container -> null only on a CLEAN exit');
 }
 console.log('ALL PASS');
