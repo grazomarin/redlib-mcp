@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mergeServer, writeAtomic } from './dist/config-write.js';
+import { mergeServer, writeAtomic } from '../dist/config-write.js';
 
 // merge preserves sibling servers (never overwrite the whole map) — spec §8.
 {

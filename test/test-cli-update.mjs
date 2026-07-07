@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { cmdUpdate } from './dist/cli.js';
+import { cmdUpdate } from '../dist/cli.js';
 
 function baseDeps(overrides) {
   return {

@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { resolveRedlibUrl } from './dist/config.js';
+import { resolveRedlibUrl } from '../dist/config.js';
 
 // Isolate the hardcoded fallback from ambient env — the signature's default param binds
 // `raw = process.env.REDLIB_URL`, so calling with no arg would otherwise read the environment

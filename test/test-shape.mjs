@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { assertRedlibContent } from './dist/errors.js';
+import { assertRedlibContent } from '../dist/errors.js';
 
 // A valid Redlib content page (even an EMPTY listing) has the #column_one shell -> no throw.
 assert.doesNotThrow(() => assertRedlibContent('<html><body><div id="column_one"><div id="posts"></div></div></body></html>'));

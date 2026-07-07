@@ -1,6 +1,6 @@
 import assert from 'node:assert';
-import { REDLIB_PIN } from './dist/pin.js';
-import { dataDir, cloneDir } from './dist/paths.js';
+import { REDLIB_PIN } from '../dist/pin.js';
+import { dataDir, cloneDir } from '../dist/paths.js';
 
 // Pin is a 40-char immutable SHA (a reviewed main commit, not a tag) — spec §6.1.
 assert.match(REDLIB_PIN.sha, /^[0-9a-f]{40}$/, 'pin.sha must be a full 40-hex commit SHA');

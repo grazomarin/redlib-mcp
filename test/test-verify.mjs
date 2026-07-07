@@ -1,6 +1,6 @@
 import assert from 'node:assert';
-import { verifyCandidate } from './dist/verify.js';
-import { RedlibError } from './dist/errors.js';
+import { verifyCandidate } from '../dist/verify.js';
+import { RedlibError } from '../dist/errors.js';
 
 // Inject a fake backend so we test the DECISION logic (spec §6.7) without a container:
 // valid data -> promote; persistent PARSE_ERROR -> discard; persistent transient -> defer.

@@ -1,10 +1,10 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { parsePostDetails, pruneBFS, nextAfter } from './dist/parse.js';
+import { parsePostDetails, pruneBFS, nextAfter } from '../dist/parse.js';
 
 // Exercise the REAL parser (index.ts's core, now in parse.ts) against the captured fixture —
 // not a hand-rolled copy. A parser regression now fails offline instead of only in the live E2E.
-const html = readFileSync('sample-post.html', 'utf8');
+const html = readFileSync(new URL('./sample-post.html', import.meta.url), 'utf8');
 
 // --- real parser against the fixture ---
 const full = parsePostDetails(html, 10_000, 'http://127.0.0.1:8080');

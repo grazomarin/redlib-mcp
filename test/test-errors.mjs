@@ -1,7 +1,7 @@
 // Golden-file classifier test. Fixtures are captured from a built Redlib image
 // (see spec §6.3); update them on every Redlib pin bump.
 import assert from 'node:assert';
-import { classifyRedlib } from './dist/errors.js';
+import { classifyRedlib } from '../dist/errors.js';
 
 const cases = [
   [404, '<div class="error"><h1>Too many requests.</h1></div>', 'RATE_LIMITED'],

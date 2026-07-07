@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseFlags, serverEntry, cmdSetup } from './dist/cli.js';
+import { parseFlags, serverEntry, cmdSetup } from '../dist/cli.js';
 
 // flags: --port 9000 --yes --non-loopback -> parsed; bare subcommand args ignored.
 {

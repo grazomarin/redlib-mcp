@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { RedlibBackend } from './dist/backend/redlib.js';
+import { RedlibBackend } from '../dist/backend/redlib.js';
 const b = new RedlibBackend();
 assert.equal(typeof b.fetch, 'function');
 // A backend is just the transport seam; a bad path surfaces a typed RedlibError.

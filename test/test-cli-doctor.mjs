@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { formatDoctor, runDoctor } from './dist/cli.js';
+import { formatDoctor, runDoctor } from '../dist/cli.js';
 
 // formatDoctor: any failing check -> non-zero exit + the fix text is shown.
 {

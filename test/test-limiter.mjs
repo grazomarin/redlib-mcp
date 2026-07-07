@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { MinIntervalLimiter } from './dist/limiter.js';
+import { MinIntervalLimiter } from '../dist/limiter.js';
 
 const lim = new MinIntervalLimiter(120);
 const t0 = Date.now();
