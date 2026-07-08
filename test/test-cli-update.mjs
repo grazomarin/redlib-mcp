@@ -3,7 +3,7 @@ import { cmdUpdate } from '../dist/cli.js';
 
 function baseDeps(overrides) {
   return {
-    detectEngine: async () => ({ bin: 'docker', kind: 'docker' }),
+    locateBackend: async () => ({ engine: { bin: 'docker', kind: 'docker' }, id: 'x' }),
     daemonReachable: async () => true,
     cloneAtPin: async () => {},
     buildImage: async () => {},

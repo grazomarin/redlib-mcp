@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { detectEngine, containerIdOnPort, restartContainer } from '../dist/engine.js';
+import { detectEngine, containerIdOnPort, restartContainer, locateBackend } from '../dist/engine.js';
 
 // A mock Runner records calls and returns scripted results by binary NAME — so we test resolution
 // logic without a real docker/podman. `version` is how we distinguish a working engine (spec §8).
@@ -83,5 +83,39 @@ const existsAll = () => true; // pretend the absolute candidate paths are on dis
   const run = async (file, args) => { calls.push([file, ...args]); return { stdout: '', stderr: '', code: 0 }; };
   await restartContainer({ bin: '/usr/bin/podman', kind: 'podman' }, 'redlib-mcp', run);
   assert.deepEqual(calls[0], ['/usr/bin/podman', 'restart', 'redlib-mcp'], 'restart passes `restart <name>` argv');
+}
+// locateBackend: on a DUAL-engine box it finds the backend on the NON-preferred engine (podman) even
+// though docker is preferred — the whole point of the cross-engine fix.
+{
+  const run = async (file, args) => {
+    const name = file.includes('podman') ? 'podman' : 'docker';
+    if (args[0] === 'version') return { stdout: '99', stderr: '', code: 0 };   // both engines installed + reachable
+    if (args[0] === 'ps') return name === 'podman'
+      ? { stdout: 'pod123 0.0.0.0:8080->8080/tcp\n', stderr: '', code: 0 }      // podman HOSTS the backend
+      : { stdout: '', stderr: '', code: 0 };                                     // docker has nothing on :8080
+    return { stdout: '', stderr: '', code: 0 };
+  };
+  const { engine, id } = await locateBackend(8080, undefined, run, {}, () => true);
+  assert.equal(engine.kind, 'podman', 'locates the backend on podman despite docker being preferred');
+  assert.equal(id, 'pod123', 'returns the hosting container id');
+}
+// locateBackend: an explicit `prefer` short-circuits the cross-engine search (docker chosen even though
+// only podman would be probed second).
+{
+  const run = async (file, args) => (args[0] === 'ps'
+    ? { stdout: 'x 0.0.0.0:8080->8080/tcp\n', stderr: '', code: 0 }
+    : { stdout: '99', stderr: '', code: 0 });
+  const { engine } = await locateBackend(8080, 'docker', run, {}, () => true);
+  assert.equal(engine.kind, 'docker', 'prefer=docker honored, no cross-engine search');
+}
+// locateBackend: nothing running on either engine -> the preferred (docker) engine with id=null, so the
+// caller still has a sane engine for its "not running -> run setup" message.
+{
+  const run = async (file, args) => (args[0] === 'ps'
+    ? { stdout: '', stderr: '', code: 0 }
+    : { stdout: '99', stderr: '', code: 0 });
+  const { engine, id } = await locateBackend(8080, undefined, run, {}, () => true);
+  assert.equal(engine.kind, 'docker', 'falls back to the preferred engine when nothing hosts the backend');
+  assert.equal(id, null, 'id is null when neither engine hosts it');
 }
 console.log('ALL PASS');

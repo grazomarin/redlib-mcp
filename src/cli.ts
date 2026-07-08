@@ -1,5 +1,5 @@
 import {
-  detectEngine, daemonReachable, containerIdOnPort, waitHealthy, hostArch, imageArch,
+  detectEngine, daemonReachable, containerIdOnPort, locateBackend, waitHealthy, hostArch, imageArch,
   cloneAtPin, buildImage, runContainer, stopContainer, restartContainer, tagImage, removeImage, withBuildLock,
   type Engine,
 } from "./engine.js";
@@ -28,9 +28,8 @@ export type DoctorResult = { check: string; ok: boolean; detail: string; fix?: s
 
 // Deps are injected so the diagnostic sequence is testable without a real engine/container.
 export interface DoctorDeps {
-  detectEngine: () => Promise<Engine>;
+  locateBackend: (port: number) => Promise<{ engine: Engine; id: string | null }>;
   daemonReachable: (e: Engine) => Promise<boolean>;
-  containerIdOnPort: (e: Engine, port: number) => Promise<string | null>;
   waitHealthy: (url: string) => Promise<boolean>;
   verifyCandidate: (url: string) => Promise<{ decision: string; lastKind: string; detail: string }>;
   hostArch: () => string;
@@ -40,17 +39,20 @@ export interface DoctorDeps {
 
 export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
   const out: DoctorResult[] = [];
-  let engine: Engine;
-  try { engine = await deps.detectEngine(); out.push({ check: "engine", ok: true, detail: `${engine.kind} (${engine.bin})` }); }
-  catch (e: any) { out.push({ check: "engine", ok: false, detail: String(e?.message || e), fix: "Install Docker Desktop or Podman; ensure it is on PATH." }); return out; }
+  let engine: Engine, id: string | null;
+  // Locate the backend across BOTH engines — on a dual-engine machine it may be on the non-preferred one.
+  try {
+    ({ engine, id } = await deps.locateBackend(DEFAULT_PORT));
+    out.push({ check: "engine", ok: true, detail: `${engine.kind} (${engine.bin})${id ? " — hosts the backend" : ""}` });
+  } catch (e: any) {
+    out.push({ check: "engine", ok: false, detail: String(e?.message || e), fix: "Install Docker Desktop or Podman; ensure it is on PATH." });
+    return out;
+  }
 
   const daemon = await deps.daemonReachable(engine);
   out.push({ check: "daemon", ok: daemon, detail: daemon ? "reachable" : "unreachable", fix: daemon ? undefined : "Start Docker Desktop / the Docker daemon (mac/Win: check 'launch at login')." });
   if (!daemon) return out;
 
-  let id: string | null;
-  try { id = await deps.containerIdOnPort(engine, DEFAULT_PORT); }
-  catch (e: any) { out.push({ check: `container on :${DEFAULT_PORT}`, ok: false, detail: `engine query failed: ${e?.message || e}`, fix: "The container engine errored on `ps` — check it is healthy, then re-run." }); return out; }
   out.push({ check: `container on :${DEFAULT_PORT}`, ok: !!id, detail: id ? `running (${id})` : "not running", fix: id ? undefined : "Run `redlib-mcp setup` to build and start the Redlib backend." });
   if (!id) return out;
 
@@ -81,12 +83,14 @@ export function formatDoctor(results: DoctorResult[]): { text: string; exitCode:
   return { text: lines.join("\n"), exitCode: failed ? 1 : 0 };
 }
 
-async function cmdDoctor(): Promise<number> {
+async function cmdDoctor(argv: string[] = []): Promise<number> {
+  const flags = parseFlags(argv);
+  const eng = parseEngineFlag(flags);
+  if (eng.err) { say(eng.err); return 2; }
   const url = resolveRedlibUrl();
   const results = await runDoctor({
-    detectEngine: () => detectEngine(),
+    locateBackend: (port) => locateBackend(port, eng.prefer),
     daemonReachable: (e) => daemonReachable(e),
-    containerIdOnPort: (e, port) => containerIdOnPort(e, port),
     waitHealthy: (u) => waitHealthy(u, { tries: 3, delayMs: 1000 }), // doctor fast-fails (~3s); the 60s budget is for setup's post-build bring-up
     verifyCandidate: (u) => verifyCandidate(u),
     hostArch: () => hostArch(),
@@ -283,7 +287,7 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
 }
 
 export interface UpdateDeps {
-  detectEngine: () => Promise<Engine>;
+  locateBackend: (port: number, prefer?: "docker" | "podman") => Promise<{ engine: Engine; id: string | null }>;
   daemonReachable: (e: Engine) => Promise<boolean>;
   cloneAtPin: (dir: string) => Promise<void>;
   buildImage: (dir: string, tag: string, e: Engine) => Promise<void>;
@@ -300,8 +304,11 @@ export interface UpdateDeps {
 // it on a temp port, and promotes :latest ONLY on valid data. PARSE_ERROR discards (keep old);
 // a transient defers (keep old, re-verify later). The live service is never disrupted.
 export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Promise<number> {
+  const flags = parseFlags(argv);
+  const eng = parseEngineFlag(flags);
+  if (eng.err) { say(eng.err); return 2; }
   const d: UpdateDeps = {
-    detectEngine: () => detectEngine(), daemonReachable: (e) => daemonReachable(e),
+    locateBackend: (p, prefer) => locateBackend(p, prefer), daemonReachable: (e) => daemonReachable(e),
     cloneAtPin: (dir) => cloneAtPin(dir), buildImage: (dir, tag, e) => buildImage(dir, tag, e),
     runContainer: (e, o) => runContainer(e, o), stopContainer: (e, n) => stopContainer(e, n),
     waitHealthy: (u) => waitHealthy(u), tagImage: (e, f, t) => tagImage(e, f, t),
@@ -309,7 +316,9 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
     withBuildLock: (fn) => withBuildLock(buildLockPath(), fn), // serialize concurrent builds
     ...deps,
   };
-  const engine = await d.detectEngine();
+  // Build on the engine that HOSTS the backend (dual-engine machine) so the promoted :latest lands in the
+  // store the running container actually reads — else the update would be invisible to it.
+  const { engine } = await d.locateBackend(DEFAULT_PORT, eng.prefer);
   if (!(await d.daemonReachable(engine))) { say("daemon not reachable; start it and re-run."); return 3; }
 
   const dir = cloneDir();
@@ -331,9 +340,8 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
 }
 
 export interface RestartDeps {
-  detectEngine: () => Promise<Engine>;
+  locateBackend: (port: number, prefer?: "docker" | "podman") => Promise<{ engine: Engine; id: string | null }>;
   daemonReachable: (e: Engine) => Promise<boolean>;
-  containerIdOnPort: (e: Engine, port: number) => Promise<string | null>;
   restartContainer: (e: Engine, nameOrId: string) => Promise<void>;
   waitHealthy: (url: string) => Promise<boolean>;
 }
@@ -349,17 +357,17 @@ export async function cmdRestart(argv: string[], deps?: Partial<RestartDeps>): P
   const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
   if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
   const d: RestartDeps = {
-    detectEngine: () => detectEngine(undefined, undefined, undefined, eng.prefer),
+    locateBackend: (p, prefer) => locateBackend(p, prefer),
     daemonReachable: (e) => daemonReachable(e),
-    containerIdOnPort: (e, p) => containerIdOnPort(e, p),
     restartContainer: (e, n) => restartContainer(e, n),
     waitHealthy: (u) => waitHealthy(u),
     ...deps,
   };
-  const engine = await d.detectEngine();
-  if (!(await d.daemonReachable(engine))) { say("daemon not reachable; start it and re-run."); return 3; }
-  const id = await d.containerIdOnPort(engine, port);
-  if (!id) { say(`No Redlib backend is running on :${port}. Run \`redlib-mcp setup\` first.`); return 4; }
+  const { engine, id } = await d.locateBackend(port, eng.prefer);
+  if (!id) {
+    if (!(await d.daemonReachable(engine))) { say(`${engine.kind} daemon not reachable; start it and re-run.`); return 3; }
+    say(`No Redlib backend is running on :${port} (checked docker + podman). Run \`redlib-mcp setup\` first.`); return 4;
+  }
   say(`restarting the Redlib backend on :${port} (${engine.kind})...`);
   await d.restartContainer(engine, id);
   if (!(await d.waitHealthy(`http://127.0.0.1:${port}`))) { say("restarted but never became healthy; check the container logs."); return 4; }
@@ -370,7 +378,7 @@ export async function cmdRestart(argv: string[], deps?: Partial<RestartDeps>): P
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[0];
   switch (cmd) {
-    case "doctor": return cmdDoctor();
+    case "doctor": return cmdDoctor(argv.slice(1));
     case "setup": return cmdSetup(argv.slice(1));
     case "restart": return cmdRestart(argv.slice(1));
     case "update": return cmdUpdate(argv.slice(1));

@@ -1,63 +1,59 @@
 import assert from 'node:assert';
 import { cmdRestart } from '../dist/cli.js';
 
-// happy path: a container holds :8080 -> restart it, it becomes healthy -> exit 0.
+// happy path: locateBackend finds the container (on whichever engine hosts it) -> restart it, healthy -> 0.
 {
   const restarted = [];
   const code = await cmdRestart([], {
-    detectEngine: async () => ({ bin: '/usr/bin/podman', kind: 'podman' }),
+    locateBackend: async () => ({ engine: { bin: '/usr/bin/podman', kind: 'podman' }, id: 'abc123' }),
     daemonReachable: async () => true,
-    containerIdOnPort: async () => 'abc123',
     restartContainer: async (_e, n) => { restarted.push(n); },
     waitHealthy: async () => true,
   });
   assert.equal(code, 0, `healthy restart -> 0, got ${code}`);
-  assert.deepEqual(restarted, ['abc123'], 'restarts the container found on the port (by id, name-agnostic)');
+  assert.deepEqual(restarted, ['abc123'], 'restarts the located container by id (name/engine-agnostic)');
 }
 
-// nothing on the port -> exit 4, and it must NOT blindly restart.
+// nothing hosts the backend (id null) but daemon up -> exit 4, must NOT blindly restart.
 {
   let restarted = false;
   const code = await cmdRestart([], {
-    detectEngine: async () => ({ bin: 'd', kind: 'docker' }),
+    locateBackend: async () => ({ engine: { bin: 'd', kind: 'docker' }, id: null }),
     daemonReachable: async () => true,
-    containerIdOnPort: async () => null,
     restartContainer: async () => { restarted = true; },
     waitHealthy: async () => true,
   });
-  assert.equal(code, 4, `no container -> 4, got ${code}`);
+  assert.equal(code, 4, `no backend on either engine -> 4, got ${code}`);
   assert.equal(restarted, false, 'must not restart when nothing is on the port');
 }
 
 // restarted but never healthy -> exit 4 (surfaces the failure, no false success).
 {
   const code = await cmdRestart([], {
-    detectEngine: async () => ({ bin: 'd', kind: 'docker' }),
+    locateBackend: async () => ({ engine: { bin: 'd', kind: 'docker' }, id: 'x' }),
     daemonReachable: async () => true,
-    containerIdOnPort: async () => 'x',
     restartContainer: async () => {},
     waitHealthy: async () => false,
   });
   assert.equal(code, 4, `unhealthy after restart -> 4, got ${code}`);
 }
 
-// daemon down -> exit 3, never reaches the container.
+// no backend found AND the resolved engine's daemon is down -> exit 3 (distinct from "not running").
 {
   const code = await cmdRestart([], {
-    detectEngine: async () => ({ bin: 'd', kind: 'docker' }),
+    locateBackend: async () => ({ engine: { bin: 'd', kind: 'docker' }, id: null }),
     daemonReachable: async () => false,
-    containerIdOnPort: async () => 'x',
     restartContainer: async () => {},
     waitHealthy: async () => true,
   });
   assert.equal(code, 3, `daemon down -> 3, got ${code}`);
 }
 
-// invalid --engine value is rejected BEFORE touching the engine (validation, exit 2).
+// invalid --engine value is rejected BEFORE locating anything (validation, exit 2).
 {
   const code = await cmdRestart(['--engine', 'k8s'], {
-    detectEngine: async () => { throw new Error('must not detect on invalid --engine'); },
-    daemonReachable: async () => true, containerIdOnPort: async () => 'x',
+    locateBackend: async () => { throw new Error('must not locate on invalid --engine'); },
+    daemonReachable: async () => true,
     restartContainer: async () => {}, waitHealthy: async () => true,
   });
   assert.equal(code, 2, `invalid --engine -> 2, got ${code}`);

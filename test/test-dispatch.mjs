@@ -15,11 +15,16 @@ function serveProbe() {
     setTimeout(() => { c.kill(); res({ out, err, exited }); }, 1500);
   });
 }
-function runCmd(args) {
+function runCmd(args, maxMs = 8000) {
   return new Promise((res) => {
     const c = spawn('node', ['dist/entry.js', ...args], { env: { ...process.env, REDLIB_URL: 'http://127.0.0.1:8080' }, stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '', err = ''; c.stdout.on('data', d => out += d); c.stderr.on('data', d => err += d);
-    c.stdin.end(''); setTimeout(() => { c.kill(); res({ out, err }); }, 800);
+    c.stdin.end('');
+    // Wait for the one-shot command to EXIT (so we capture its full output) — doctor prints once at the
+    // end, and when a backend is up it runs health+smoke, which easily exceeds a fixed 800ms kill. The
+    // timer is only a safety net for a hung command.
+    const t = setTimeout(() => c.kill(), maxMs);
+    c.on('exit', () => { clearTimeout(t); res({ out, err }); });
   });
 }
 

@@ -189,6 +189,38 @@ export async function containerIdOnPort(engine: Engine, port: number, run: Runne
   return null;
 }
 
+// Find the engine that actually HOSTS the redlib container on `port`, across BOTH docker and podman.
+// On a dual-engine machine the backend can live on the non-preferred engine (e.g. built with
+// `--engine podman` while docker is also installed) — plain detectEngine picks docker and misses it, so
+// restart/doctor/update would look in the wrong store. An explicit choice (REDLIB_ENGINE abs path, or
+// `prefer` from `--engine`) short-circuits the search. Returns the hosting engine + container id; or the
+// first working engine with id=null when nothing hosts it (so callers still resolve a sane engine for
+// their "not running -> run setup" message). Throws the standard clear error only if NO engine works.
+export async function locateBackend(
+  port: number,
+  prefer?: "docker" | "podman",
+  run: Runner = defaultRunner,
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (p: string) => boolean = existsSync,
+): Promise<{ engine: Engine; id: string | null }> {
+  if (env.REDLIB_ENGINE || prefer) {
+    const engine = await detectEngine(run, env, exists, prefer);
+    return { engine, id: await containerIdOnPort(engine, port, run) };
+  }
+  let fallback: Engine | null = null;
+  for (const kind of ["docker", "podman"] as const) {
+    let engine: Engine;
+    try { engine = await detectEngine(run, env, exists, kind); } catch { continue; } // this kind not installed/working
+    fallback ??= engine;                                   // first working engine = a sane default for messages
+    if (!(await daemonReachable(engine, run))) continue;   // can't `ps` a down daemon; try the other engine
+    let id: string | null = null;
+    try { id = await containerIdOnPort(engine, port, run); } catch { continue; } // ps hiccup on this engine: try the other
+    if (id) return { engine, id };                         // this engine HOSTS the backend
+  }
+  if (fallback) return { engine: fallback, id: null };     // engine(s) present, backend not running on either
+  return { engine: await detectEngine(run, env, exists), id: null }; // nothing installed -> standard clear throw
+}
+
 export async function tagImage(engine: Engine, from: string, to: string, run: Runner = defaultRunner): Promise<void> {
   await ok(await run(engine.bin, ["tag", from, to]), `tag ${from} -> ${to}`);
 }
