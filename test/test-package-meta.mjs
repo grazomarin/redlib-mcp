@@ -15,7 +15,8 @@ assert.equal(pkg.publishConfig?.access, 'public', 'scoped/registry publish is pu
 assert.ok(!(pkg.keywords || []).some(k => /bypass|evade|circumvent|scrape|harvest|dataset/i.test(k)), 'keywords carry no forbidden framing word');
 // what actually gets packed. npm force-includes README + LICENSE but NOT NOTICE (verified: npm 11.6.2
 // packlist) — so NOTICE must be in files[] or the AGPL/trademark notice ships nowhere.
-const packed = execFileSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'; // execFileSync has no shell; Windows npm is npm.cmd
+const packed = execFileSync(npmCmd, ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
 const names = JSON.parse(packed)[0].files.map(f => f.path);
 assert.ok(names.some(n => n.startsWith('skills/')), 'packed tarball includes the skill');
 assert.ok(names.includes('server.json'), 'packed tarball includes server.json');

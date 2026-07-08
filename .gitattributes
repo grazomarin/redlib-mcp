@@ -1,0 +1,3 @@
+# Normalize line endings to LF on checkout everywhere. Without this, git's Windows checkout rewrites
+# LF->CRLF, which broke a frontmatter regex test on the windows CI runner. Fixes that whole class.
+* text=auto eol=lf
