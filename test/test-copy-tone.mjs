@@ -4,7 +4,7 @@ import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const dir = mkdtempSync(join(tmpdir(), 'framing-'));
+const dir = mkdtempSync(join(tmpdir(), 'copy-tone-'));
 const clean = join(dir, 'clean.md'); writeFileSync(clean, 'Read public Reddit via a self-hosted frontend.');
 const dirty = join(dir, 'dirty.md'); writeFileSync(dirty, 'This tool helps you bypass Reddit blocks.');
 

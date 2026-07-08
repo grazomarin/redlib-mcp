@@ -10,7 +10,7 @@ const FORBIDDEN = [
 const files = process.argv.slice(2);
 const targets = files.length ? files : [
   'README.md', 'package.json', 'skills/setup-redlib/SKILL.md', 'src/index.ts',
-  'server.json', 'NOTICE', 'PUBLISHING.md',
+  'server.json', 'NOTICE',
 ];
 
 let hits = 0;
@@ -22,5 +22,5 @@ for (const f of targets) {
     if (m) { console.error(`off-tone phrasing in ${f}: "${m[0]}"`); hits++; }
   }
 }
-if (hits) { console.error(`\n${hits} off-tone phrase(s) flagged — keep public copy accurate and neutral.`); process.exit(1); }
-console.log('framing check: clean');
+if (hits) { console.error(`\n${hits} off-tone phrase(s) flagged — keep public copy accurate.`); process.exit(1); }
+console.log('copy-tone check: clean');

@@ -12,7 +12,7 @@ assert.ok(/grazomarin\/redlib-mcp/.test(pkg.repository?.url || ''), 'repository 
 for (const f of ['dist', 'skills', 'server.json', 'NOTICE'])
   assert.ok((pkg.files || []).includes(f), `files[] must ship ${f} (npm does NOT auto-include NOTICE)`);
 assert.equal(pkg.publishConfig?.access, 'public', 'scoped/registry publish is public');
-assert.ok(!(pkg.keywords || []).some(k => /bypass|evade|circumvent|scrape|harvest|dataset/i.test(k)), 'keywords carry no forbidden framing word');
+assert.ok(!(pkg.keywords || []).some(k => /bypass|evade|circumvent|scrape|harvest|dataset/i.test(k)), 'keywords carry no off-tone word');
 // what actually gets packed. npm force-includes README + LICENSE but NOT NOTICE (verified: npm 11.6.2
 // packlist) — so NOTICE must be in files[] or the AGPL/trademark notice ships nowhere.
 // execSync runs a shell command string, which resolves npm -> npm.cmd on Windows natively (a bare

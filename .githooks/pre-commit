@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-node scripts/check-forbidden-words.mjs || { echo "commit blocked: forbidden framing (spec §2)"; exit 1; }
+node scripts/check-forbidden-words.mjs || { echo "commit blocked: off-tone copy"; exit 1; }

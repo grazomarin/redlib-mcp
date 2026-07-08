@@ -20,5 +20,5 @@ for (const k of ['RATE_LIMITED', 'UPSTREAM_TOKEN_STALE', 'REDLIB_DOWN', 'CONTENT
   assert.ok(s.includes(k), `self-heal references the ${k} enum kind`);
 assert.ok(/register/i.test(s) && /client/i.test(s), 'instructs registering the MCP into the caller client');
 assert.ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u.test(s), 'SKILL.md must contain no emoji');
-execFileSync('node', ['scripts/check-forbidden-words.mjs', 'skills/setup-redlib/SKILL.md']); // framing gate
+execFileSync('node', ['scripts/check-forbidden-words.mjs', 'skills/setup-redlib/SKILL.md']); // copy-tone check
 console.log('ALL PASS');

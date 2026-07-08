@@ -15,8 +15,8 @@
     "start": "node dist/index.js",
     "test": "npm run build && node test/run-tests.mjs",
     "test:e2e": "node test/test-mcp.mjs",
-    "check:framing": "node scripts/check-forbidden-words.mjs",
-    "prepublishOnly": "npm run build && npm run check:framing"
+    "check:copy-tone": "node scripts/check-forbidden-words.mjs",
+    "prepublishOnly": "npm run build && npm run check:copy-tone"
   },
   "keywords": [
     "mcp",

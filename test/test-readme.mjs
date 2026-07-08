@@ -16,6 +16,6 @@ assert.ok(/Linux[\s\S]{0,40}Tested/i.test(md) && /Experimental/i.test(md), 'must
 assert.ok(md.includes('127.0.0.1'), 'must show the loopback default, not localhost-only');
 // no emojis anywhere (Kamran rule) — reject the common emoji ranges
 assert.ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/u.test(md), 'README must contain no emoji');
-// framing gate (Plan 1) must pass on the README
+// copy-tone check must pass on the README
 execFileSync('node', ['scripts/check-forbidden-words.mjs', 'README.md']); // throws on a forbidden word
 console.log('ALL PASS');
