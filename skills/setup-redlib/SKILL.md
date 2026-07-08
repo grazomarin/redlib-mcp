@@ -34,8 +34,8 @@ If an MCP tool call fails, do NOT reinstall blindly. Run `redlib-mcp doctor`, re
 kind, and take the matching action, then retry once:
 
 - `RATE_LIMITED` — Reddit throttling. Wait and retry; never rebuild.
-- `UPSTREAM_TOKEN_STALE` — restart the container once (`redlib-mcp doctor` shows how), then retry.
-- `REDLIB_DOWN` — the backend is not serving. Restart the container; if still down, surface it.
+- `UPSTREAM_TOKEN_STALE` — the Reddit token went stale. Run `redlib-mcp restart` (refetches a fresh token), then retry. Never rebuild.
+- `REDLIB_DOWN` — the backend is not serving. Run `redlib-mcp restart`; if still down after that, surface it.
 - `BAD_INPUT` — your tool arguments were malformed (an unparseable url, or a missing subreddit/postId). Fix the arguments and retry. This is NOT a backend problem — never rebuild, restart, or update.
 - `CONTENT_UNAVAILABLE` — the post/user is gone or gated. Report to the user; not a setup problem.
 - `PARSE_ERROR` — persistent parse failure. Usually **terminal at the current pin** (spec §6.3):

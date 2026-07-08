@@ -1,6 +1,6 @@
 import {
   detectEngine, daemonReachable, containerIdOnPort, waitHealthy, hostArch, imageArch,
-  cloneAtPin, buildImage, runContainer, stopContainer, tagImage, removeImage, withBuildLock,
+  cloneAtPin, buildImage, runContainer, stopContainer, restartContainer, tagImage, removeImage, withBuildLock,
   type Engine,
 } from "./engine.js";
 import { verifyCandidate } from "./verify.js";
@@ -103,10 +103,13 @@ export function printHelp(): void {
     "redlib-mcp — read public Reddit via a self-hosted Redlib backend.\n" +
     "  redlib-mcp serve             run the MCP stdio server\n" +
     "  redlib-mcp setup             build + start the Redlib backend, register the MCP\n" +
+    "  redlib-mcp restart           restart the backend (refetches a stale Reddit token)\n" +
     "  redlib-mcp update            rebuild at the pinned commit; promote only if verified\n" +
     "  redlib-mcp doctor            diagnose engine/container/health and print fixes\n" +
     "\nsetup flags: --yes (write the client config without an interactive prompt — for agents,\n" +
-    "             which have no TTY), --print-only (show the diff, don't write), --port <n>, --non-loopback",
+    "             which have no TTY), --print-only (show the diff, don't write), --port <n>, --non-loopback,\n" +
+    "             --engine docker|podman (force the container engine; default: docker, else podman)\n" +
+    "restart flags: --port <n>, --engine docker|podman",
   );
 }
 
@@ -154,6 +157,15 @@ export function parseFlags(argv: string[]): Record<string, string | boolean> {
   return f;
 }
 
+// Parse `--engine docker|podman` (shared by setup + restart). Returns the preferred kind, {} for
+// auto (docker-preferred), or a validation error. REDLIB_ENGINE (absolute path) still wins over this.
+function parseEngineFlag(flags: Record<string, string | boolean>): { prefer?: "docker" | "podman"; err?: string } {
+  const v = flags.engine;
+  if (v === undefined) return {};
+  if (v === "docker" || v === "podman") return { prefer: v };
+  return { err: `invalid --engine value: ${String(v)} (expected: docker or podman)` };
+}
+
 // The MCP config entry `setup` writes. Immutable-versioned: an absolute installed bin if
 // we have one (offline start, no registry round-trip), else EXACT-version npx — never floating.
 export function serverEntry(binPath: string | null, version: string): ServerEntry {
@@ -187,9 +199,9 @@ export interface SetupDeps {
   version: string;
 }
 
-function withSetupDefaults(deps?: Partial<SetupDeps>): SetupDeps {
+function withSetupDefaults(deps?: Partial<SetupDeps>, prefer?: "docker" | "podman"): SetupDeps {
   return {
-    detectEngine: () => detectEngine(),
+    detectEngine: () => detectEngine(undefined, undefined, undefined, prefer),
     daemonReachable: (e) => daemonReachable(e),
     cloneAtPin: (dir) => cloneAtPin(dir),
     buildImage: (dir, tag, e) => buildImage(dir, tag, e),
@@ -212,7 +224,9 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
   const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
   if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
   const host = flags["non-loopback"] ? "0.0.0.0" : "127.0.0.1";
-  const d = withSetupDefaults(deps);
+  const eng = parseEngineFlag(flags);
+  if (eng.err) { say(eng.err); return 2; }
+  const d = withSetupDefaults(deps, eng.prefer);
 
   const engine = await d.detectEngine();
   say(`engine: ${engine.kind} (${engine.bin})`);
@@ -316,11 +330,49 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
   return 6;
 }
 
+export interface RestartDeps {
+  detectEngine: () => Promise<Engine>;
+  daemonReachable: (e: Engine) => Promise<boolean>;
+  containerIdOnPort: (e: Engine, port: number) => Promise<string | null>;
+  restartContainer: (e: Engine, nameOrId: string) => Promise<void>;
+  waitHealthy: (url: string) => Promise<boolean>;
+}
+
+// Restart the running Redlib backend on :port. Purpose is TOKEN RECOVERY: when Reddit invalidates
+// Redlib's spoofed OAuth token the container stays Up but 404s every read, and a restart refetches a
+// fresh token. Restarts whatever holds the port (robust to container name). The agent self-heal skill
+// calls this on UPSTREAM_TOKEN_STALE / REDLIB_DOWN.
+export async function cmdRestart(argv: string[], deps?: Partial<RestartDeps>): Promise<number> {
+  const flags = parseFlags(argv);
+  const eng = parseEngineFlag(flags);
+  if (eng.err) { say(eng.err); return 2; }
+  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
+  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
+  const d: RestartDeps = {
+    detectEngine: () => detectEngine(undefined, undefined, undefined, eng.prefer),
+    daemonReachable: (e) => daemonReachable(e),
+    containerIdOnPort: (e, p) => containerIdOnPort(e, p),
+    restartContainer: (e, n) => restartContainer(e, n),
+    waitHealthy: (u) => waitHealthy(u),
+    ...deps,
+  };
+  const engine = await d.detectEngine();
+  if (!(await d.daemonReachable(engine))) { say("daemon not reachable; start it and re-run."); return 3; }
+  const id = await d.containerIdOnPort(engine, port);
+  if (!id) { say(`No Redlib backend is running on :${port}. Run \`redlib-mcp setup\` first.`); return 4; }
+  say(`restarting the Redlib backend on :${port} (${engine.kind})...`);
+  await d.restartContainer(engine, id);
+  if (!(await d.waitHealthy(`http://127.0.0.1:${port}`))) { say("restarted but never became healthy; check the container logs."); return 4; }
+  say("restarted and serving. A stale-token failure (reads 404ing) should now recover.");
+  return 0;
+}
+
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[0];
   switch (cmd) {
     case "doctor": return cmdDoctor();
     case "setup": return cmdSetup(argv.slice(1));
+    case "restart": return cmdRestart(argv.slice(1));
     case "update": return cmdUpdate(argv.slice(1));
     default: printHelp(); return cmd ? 2 : 0;
   }

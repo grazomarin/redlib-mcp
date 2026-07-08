@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { detectEngine, containerIdOnPort } from '../dist/engine.js';
+import { detectEngine, containerIdOnPort, restartContainer } from '../dist/engine.js';
 
 // A mock Runner records calls and returns scripted results by binary NAME — so we test resolution
 // logic without a real docker/podman. `version` is how we distinguish a working engine (spec §8).
@@ -54,5 +54,19 @@ const existsAll = () => true; // pretend the absolute candidate paths are on dis
   await assert.rejects(() => containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: 'daemon busy', code: 1 })), /ps.*failed/i, 'ps failure must throw, not return null');
   assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: 'abc123\n', stderr: '', code: 0 })), 'abc123', 'running container id returned on success');
   assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: '', code: 0 })), null, 'no container -> null only on a CLEAN exit');
+}
+// --engine prefer: narrows detection to ONE kind (the `--engine docker|podman` flag).
+{
+  const e = await detectEngine(mockRunner('podman').run, {}, existsAll, 'podman');
+  assert.equal(e.kind, 'podman', 'prefer=podman selects podman');
+  // prefer=docker but only podman responds -> a clear error that NAMES the requested flag, not a silent podman fallback.
+  await assert.rejects(() => detectEngine(mockRunner('podman').run, {}, existsAll, 'docker'), /--engine docker/i, 'prefer=docker with no docker rejects (no silent fallback)');
+}
+// restartContainer issues `restart <nameOrId>` on the resolved engine binary (argv, never a shell string).
+{
+  const calls = [];
+  const run = async (file, args) => { calls.push([file, ...args]); return { stdout: '', stderr: '', code: 0 }; };
+  await restartContainer({ bin: '/usr/bin/podman', kind: 'podman' }, 'redlib-mcp', run);
+  assert.deepEqual(calls[0], ['/usr/bin/podman', 'restart', 'redlib-mcp'], 'restart passes `restart <name>` argv');
 }
 console.log('ALL PASS');

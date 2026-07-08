@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Single bin: dispatch server-vs-CLI. serve / piped-stdin -> MCP stdio server;
 // setup|update|doctor -> CLI; bare TTY / unknown command -> the shared help owned by cli.ts.
-const CLI_COMMANDS = new Set(["setup", "update", "doctor"]);
+const CLI_COMMANDS = new Set(["setup", "restart", "update", "doctor"]);
 
 async function main() {
   const argv = process.argv.slice(2);

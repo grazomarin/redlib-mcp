@@ -47,10 +47,13 @@ const CANDIDATES: Record<"docker" | "podman", string[]> = {
 // Resolve a WORKING engine: a binary whose `version` succeeds (client reachable). docker is
 // preferred, podman is the fallback. `DOCKER_HOST` etc. are honored by the resolved binary itself.
 // `exists` is injected so the resolver is testable off-host without real binaries on disk.
+// `prefer` (from `--engine docker|podman`) narrows auto-detection to that one kind. An explicit
+// REDLIB_ENGINE absolute path still wins over it (the lower-level escape hatch is the most specific).
 export async function detectEngine(
   run: Runner = defaultRunner,
   env: NodeJS.ProcessEnv = process.env,
   exists: (p: string) => boolean = existsSync,
+  prefer?: "docker" | "podman",
 ): Promise<Engine> {
   // Explicit override: an ABSOLUTE path the operator vouches for — NOT bare-PATH resolution.
   const override = env.REDLIB_ENGINE;
@@ -63,7 +66,8 @@ export async function detectEngine(
     if (r.code === 0) return { bin: override, kind: /podman/i.test(override) ? "podman" : "docker" };
     throw new Error(`REDLIB_ENGINE=${override} did not respond to \`version\`.`);
   }
-  for (const kind of ["docker", "podman"] as const) {
+  const kinds: ("docker" | "podman")[] = prefer ? [prefer] : ["docker", "podman"];
+  for (const kind of kinds) {
     for (const cand of CANDIDATES[kind]) {
       if (!exists(cand)) continue; // absolute-only: a candidate that is not on disk is never probed
       const r = await run(cand, ["version", "--format", "{{.Client.Version}}"]).catch(() => ({ stdout: "", stderr: "spawn failed", code: 127 }));
@@ -71,8 +75,10 @@ export async function detectEngine(
     }
   }
   throw new Error(
-    `No working container engine found at the standard absolute paths (${[...CANDIDATES.docker, ...CANDIDATES.podman].join(", ")}). ` +
-    `Bare PATH is intentionally not searched; set REDLIB_ENGINE to an absolute docker/podman path if yours is elsewhere. Is Docker Desktop (or Podman) running?`,
+    prefer
+      ? `--engine ${prefer} was requested but no working ${prefer} was found at its standard absolute paths (${CANDIDATES[prefer].join(", ")}). Is ${prefer} installed and running? Set REDLIB_ENGINE to an absolute path if it lives elsewhere.`
+      : `No working container engine found at the standard absolute paths (${[...CANDIDATES.docker, ...CANDIDATES.podman].join(", ")}). ` +
+        `Bare PATH is intentionally not searched; set REDLIB_ENGINE to an absolute docker/podman path if yours is elsewhere. Is Docker Desktop (or Podman) running?`,
   );
 }
 
@@ -156,6 +162,12 @@ export async function runContainer(
 
 export async function stopContainer(engine: Engine, name: string, run: Runner = defaultRunner): Promise<void> {
   await run(engine.bin, ["rm", "-f", name]); // best-effort; absent container is fine
+}
+
+// Restart a running container (by name or id). Used by `redlib-mcp restart` to refetch a stale
+// Reddit OAuth token — the container stays Up when the token dies, so nothing else restarts it.
+export async function restartContainer(engine: Engine, nameOrId: string, run: Runner = defaultRunner): Promise<void> {
+  await ok(await run(engine.bin, ["restart", nameOrId]), `restart container ${nameOrId}`);
 }
 
 // The container id publishing `port` on the host, or null. Used to detect "already running on :8080".
