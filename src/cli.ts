@@ -69,7 +69,7 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
     fix: smokeOk ? undefined
       : v.lastKind === "PARSE_ERROR"
         ? "Redlib output changed shape — likely a redlib-mcp/pin mismatch; run `redlib-mcp update`."
-        : "Transient (Reddit throttling or upstream token-stale). If it persists at the current pin, upstream Redlib has no fix yet — not your setup; wait/watch redlib-org.",
+        : "Often a stale Reddit token — try `redlib-mcp restart` (refetches it), then re-run doctor. If it persists at the current pin, it's upstream Redlib (throttling or a token-method change), not your setup.",
   });
 
   const [want, got] = [deps.hostArch(), await deps.imageArch(engine, IMAGE)];
@@ -77,8 +77,16 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
   return out;
 }
 
+// Color only when writing to a real terminal; stay plain when piped or NO_COLOR is set (and in tests).
+const COLOR = process.stderr.isTTY && !process.env.NO_COLOR;
+const paint = (code: string, s: string) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : s);
+
 export function formatDoctor(results: DoctorResult[]): { text: string; exitCode: number } {
-  const lines = results.map((r) => `${r.ok ? "OK  " : "FAIL"} ${r.check}: ${r.detail}${r.ok || !r.fix ? "" : `\n     -> ${r.fix}`}`);
+  const lines = results.map((r) => {
+    const tag = r.ok ? paint("32", "OK  ") : paint("31", "FAIL"); // green / red
+    const fix = r.ok || !r.fix ? "" : `\n     ${paint("2", "->")} ${r.fix}`;
+    return `${tag} ${paint("1", r.check)}: ${r.detail}${fix}`;
+  });
   const failed = results.some((r) => !r.ok);
   return { text: lines.join("\n"), exitCode: failed ? 1 : 0 };
 }
@@ -102,18 +110,56 @@ async function cmdDoctor(argv: string[] = []): Promise<number> {
   return exitCode;
 }
 
+// Per-command detail, shown by `redlib-mcp <command> --help`. Written for a human reading their terminal.
+const CMD_HELP: Record<string, string> = {
+  setup:
+    "redlib-mcp setup — build + start the Redlib backend, then register the MCP into your client.\n" +
+    "  Resolves docker/podman, clones + builds Redlib from the pinned commit, runs it on 127.0.0.1:8080,\n" +
+    "  verifies it end to end, then (with your confirmation) writes the MCP client-config entry.\n" +
+    "  Flags:\n" +
+    "    --yes                   write the client config without asking (non-interactive / agent use)\n" +
+    "    --print-only            show the config diff but do not write it\n" +
+    "    --port <n>              host port to bind (default 8080)\n" +
+    "    --non-loopback          bind 0.0.0.0 — exposes an UNAUTHENTICATED backend to your LAN\n" +
+    "    --engine docker|podman  force the engine (default: docker if present, else podman)",
+  restart:
+    "redlib-mcp restart — restart the running backend to refetch a stale Reddit token.\n" +
+    "  Use when reads start failing but the container is still up (a stale token doesn't crash it).\n" +
+    "  Finds the backend on docker OR podman automatically.\n" +
+    "  Flags: --port <n> (default 8080), --engine docker|podman",
+  update:
+    "redlib-mcp update — rebuild Redlib at the pinned commit; promote only if it verifies.\n" +
+    "  Builds to a temp tag, checks it serves valid content on a temp port, then swaps :latest. Never\n" +
+    "  tracks upstream HEAD unattended. Restart the container afterwards to pick up the new image.\n" +
+    "  Flags: --engine docker|podman",
+  doctor:
+    "redlib-mcp doctor — diagnose the backend and print how to fix each problem.\n" +
+    "  Checks engine, daemon, container, HTTP health, end-to-end content, and image arch — and finds the\n" +
+    "  backend on docker OR podman automatically.\n" +
+    "  Flags: --engine docker|podman",
+  serve:
+    "redlib-mcp serve — run the MCP server over stdio (this is what your MCP client launches).\n" +
+    "  Env: REDLIB_URL (default http://127.0.0.1:8080). Set USE_HTTP=true to serve over loopback HTTP at\n" +
+    "  PORT (default 3000); set REDLIB_MCP_TOKEN to require a bearer token.",
+};
+
 export function printHelp(): void {
+  const h = (s: string) => paint("1", s); // bold section headers on a terminal
   say(
-    "redlib-mcp — read public Reddit via a self-hosted Redlib backend.\n" +
-    "  redlib-mcp serve             run the MCP stdio server\n" +
-    "  redlib-mcp setup             build + start the Redlib backend, register the MCP\n" +
-    "  redlib-mcp restart           restart the backend (refetches a stale Reddit token)\n" +
-    "  redlib-mcp update            rebuild at the pinned commit; promote only if verified\n" +
-    "  redlib-mcp doctor            diagnose engine/container/health and print fixes\n" +
-    "\nsetup flags: --yes (write the client config without an interactive prompt — for agents,\n" +
-    "             which have no TTY), --print-only (show the diff, don't write), --port <n>, --non-loopback,\n" +
-    "             --engine docker|podman (force the container engine; default: docker, else podman)\n" +
-    "restart flags: --port <n>, --engine docker|podman",
+    `${h("redlib-mcp")} — read public Reddit through a private, self-hosted Redlib backend.\n` +
+    "Run it yourself from a terminal, or let an AI agent drive it (Claude Code, Codex, Cursor, Gemini CLI).\n" +
+    `\n${h("Commands")}\n` +
+    "  setup      build + start the Redlib backend, then register the MCP\n" +
+    "  restart    restart the backend (refetches a stale Reddit token)\n" +
+    "  update     rebuild at the pinned commit; promote only if it verifies\n" +
+    "  doctor     check engine, daemon, container + health, and print how to fix\n" +
+    "  serve      run the MCP server over stdio (your client launches this)\n" +
+    `\n${h("Getting started")}\n` +
+    "  redlib-mcp setup     one command: build Redlib, bring it up on 127.0.0.1:8080, register the MCP\n" +
+    "  redlib-mcp doctor    if anything looks off, this says what is wrong and how to fix it\n" +
+    `\n${h("More")}\n` +
+    "  redlib-mcp <command> --help    a command's flags in detail\n" +
+    "  common flags: --engine docker|podman, --port <n>",
   );
 }
 
@@ -377,6 +423,8 @@ export async function cmdRestart(argv: string[], deps?: Partial<RestartDeps>): P
 
 export async function run(argv: string[]): Promise<number> {
   const cmd = argv[0];
+  // Per-command help must intercept BEFORE dispatch — else `setup --help` would start a real build.
+  if (cmd && CMD_HELP[cmd] && (argv.includes("--help") || argv.includes("-h"))) { say(CMD_HELP[cmd]); return 0; }
   switch (cmd) {
     case "doctor": return cmdDoctor(argv.slice(1));
     case "setup": return cmdSetup(argv.slice(1));

@@ -5,7 +5,7 @@ A private, self-hosted window into public Reddit for your AI agent — no login,
 `redlib-mcp` is a Model Context Protocol (MCP) server that lets an AI agent read public Reddit content through a self-hosted [Redlib](https://github.com/redlib-org/redlib) instance that you run and control. It ships three parts that work together:
 
 - an **MCP server** (the reader — four tools),
-- a **cross-platform CLI** (`redlib-mcp setup | update | doctor`) that installs and operates the Redlib backend for you, and
+- a **cross-platform CLI** (`redlib-mcp setup | restart | update | doctor`) — friendly to both humans and AI agents — that installs and operates the Redlib backend, and
 - a **setup skill** that drives the CLI from your agent.
 
 Redlib itself is never bundled — the CLI clones and builds it from a pinned, reviewed upstream commit on your machine.
@@ -20,6 +20,29 @@ npx -y redlib-mcp@1.0.0 setup
 ```
 
 `setup` resolves docker or podman, clones + builds Redlib from source at the pinned reviewed commit, brings it up bound to `127.0.0.1:8080`, verifies it end to end, and (with your confirmation) registers the MCP into your client config. See `redlib-mcp doctor` if anything is off.
+
+## CLI
+
+The `redlib-mcp` command is **usable directly by a human** from a terminal and **equally drivable by an AI agent** — the same commands either way. Run `redlib-mcp` for the command list, or `redlib-mcp <command> --help` for a command's flags.
+
+| Command | What it does |
+| --- | --- |
+| `setup` | resolve docker/podman, build Redlib from the pinned commit, run it on `127.0.0.1:8080`, verify it, and register the MCP |
+| `restart` | restart the backend to refetch a stale Reddit token (reads fail while the container stays up) — finds it on either engine |
+| `update` | rebuild at the pinned commit; promote only if it verifies (never tracks upstream HEAD) |
+| `doctor` | check engine, daemon, container, health + content, and print how to fix each |
+| `serve` | run the MCP server over stdio (your client launches this) |
+
+`doctor` prints a color-coded checklist with a fix on every failing line, so a person can self-diagnose without an agent:
+
+```text
+OK   engine: podman (/usr/bin/podman) — hosts the backend
+OK   daemon: reachable
+FAIL container on :8080: not running
+     -> Run `redlib-mcp setup` to build and start the Redlib backend.
+```
+
+Commands run under **docker or podman**, chosen automatically (override with `--engine docker|podman`); `restart`, `doctor`, and `update` locate a running backend on either engine.
 
 ## Tools
 
@@ -44,7 +67,7 @@ The MCP talks only to your own loopback Redlib and never contacts reddit.com dir
 
 **HTTP transport (advanced).** By default the server speaks MCP over stdio. Set `USE_HTTP=true` to serve over HTTP on `127.0.0.1` (loopback) at `PORT` (default `3000`); set `REDLIB_MCP_TOKEN` to require a bearer token (recommended — without it the endpoint is unauthenticated). DNS-rebinding protection is on.
 
-**CLI exit codes** (`setup`/`update`/`doctor`): `0` success · `2` bad flag/unknown command · `3` container engine/daemon unreachable · `4` container started but unhealthy · `5` verification failed (build discarded) · `6` verification inconclusive (kept current image).
+**CLI exit codes** (`setup`/`restart`/`update`/`doctor`): `0` success · `2` bad flag/unknown command · `3` container engine/daemon unreachable · `4` container started but unhealthy · `5` verification failed (build discarded) · `6` verification inconclusive (kept current image).
 
 ## Platform support
 
