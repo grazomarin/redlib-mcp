@@ -48,12 +48,16 @@ const existsAll = () => true; // pretend the absolute candidate paths are on dis
   await assert.rejects(() => detectEngine(run, { REDLIB_ENGINE: './docker' }, existsAll), /absolute|relative/i, 'RELATIVE override (./docker) rejected — a slash alone is not "absolute"');
 }
 // containerIdOnPort: a FAILED `ps` (exit != 0) must THROW, not return null — else setup's clean-install
-// branch would `rm -f` a live backend + bind an unverified image on a transient engine hiccup.
+// branch would `rm -f` a live backend + bind an unverified image on a transient engine hiccup. And it
+// matches the published HOST port from the Ports column (NOT `--filter publish`, which podman rejects).
 {
-  const eng = { bin: 'docker', kind: 'docker' };
+  const eng = { bin: 'podman', kind: 'podman' };
   await assert.rejects(() => containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: 'daemon busy', code: 1 })), /ps.*failed/i, 'ps failure must throw, not return null');
-  assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: 'abc123\n', stderr: '', code: 0 })), 'abc123', 'running container id returned on success');
-  assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: '', code: 0 })), null, 'no container -> null only on a CLEAN exit');
+  const ports = async () => ({ stdout: 'abc123 0.0.0.0:8080->8080/tcp\ndef456 127.0.0.1:9090->8080/tcp\n', stderr: '', code: 0 });
+  assert.equal(await containerIdOnPort(eng, 8080, ports), 'abc123', 'returns the container publishing HOST :8080');
+  assert.equal(await containerIdOnPort(eng, 9090, ports), 'def456', 'matches HOST port, not container port (both map to 8080 inside)');
+  assert.equal(await containerIdOnPort(eng, 7000, ports), null, 'no container on the port -> null');
+  assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: '', code: 0 })), null, 'no containers -> null on a CLEAN exit');
 }
 // --engine prefer: narrows detection to ONE kind (the `--engine docker|podman` flag).
 {

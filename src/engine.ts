@@ -172,12 +172,21 @@ export async function restartContainer(engine: Engine, nameOrId: string, run: Ru
 
 // The container id publishing `port` on the host, or null. Used to detect "already running on :8080".
 export async function containerIdOnPort(engine: Engine, port: number, run: Runner = defaultRunner): Promise<string | null> {
-  const r = await run(engine.bin, ["ps", "--filter", `publish=${port}`, "--format", "{{.ID}}"]);
+  // Match the published HOST port from the Ports column. `--filter publish=` is DOCKER-ONLY — podman
+  // rejects it ("publish is an invalid filter"), so parse the port here with a format both engines share.
+  const r = await run(engine.bin, ["ps", "--format", "{{.ID}} {{.Ports}}"]);
   // A FAILED `ps` (exit != 0) is NOT "no container": returning null there would let setup's clean-install
   // branch `rm -f` a live container and bind an unverified image on a transient engine hiccup. Fail loudly.
   if (r.code !== 0) throw new Error(`\`${engine.kind} ps\` failed (exit ${r.code}): ${(r.stderr || r.stdout).slice(-200)}`);
-  const id = r.stdout.trim().split(/\s+/).filter(Boolean)[0];
-  return id || null;
+  // Ports look like "0.0.0.0:8080->8080/tcp" / "127.0.0.1:8080->8080/tcp" / "[::]:8080->8080/tcp".
+  // ":<port>->" is the HOST-published side (the container side reads "-><port>/"), so no false match.
+  for (const line of r.stdout.split("\n")) {
+    if (new RegExp(`:${port}->`).test(line)) {
+      const id = line.trim().split(/\s+/)[0];
+      if (id) return id;
+    }
+  }
+  return null;
 }
 
 export async function tagImage(engine: Engine, from: string, to: string, run: Runner = defaultRunner): Promise<void> {

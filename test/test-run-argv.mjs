@@ -28,9 +28,9 @@ function recorder(results = {}) {
   const r = calls.find(c => c.args[0] === 'run');
   assert.ok(r.args.includes('0.0.0.0:9000:8080'), 'explicit non-loopback bind honored');
 }
-// containerIdOnPort: returns an id when `ps` reports one, else null.
+// containerIdOnPort: returns the id publishing the host port (parsed from Ports), else null.
 {
-  const { run } = recorder({ 'ps': { stdout: 'abc123\n', stderr: '', code: 0 } });
+  const { run } = recorder({ 'ps': { stdout: 'abc123 0.0.0.0:8080->8080/tcp\n', stderr: '', code: 0 } });
   assert.equal(await containerIdOnPort({ bin: 'docker', kind: 'docker' }, 8080, run), 'abc123');
   const { run: run2 } = recorder({ 'ps': { stdout: '\n', stderr: '', code: 0 } });
   assert.equal(await containerIdOnPort({ bin: 'docker', kind: 'docker' }, 8080, run2), null);
