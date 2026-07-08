@@ -1,19 +1,17 @@
 name: from-scratch
 
-# Real end-to-end verification: a clean runner with only Node + Docker clones Redlib at the pinned
-# commit, BUILDS the image from source, brings the stack up via `setup`, and health-checks it. This
-# is the ONLY job that exercises the real build/run path — the offline suite (ci.yml) mocks the engine,
-# so it structurally cannot catch a malformed `docker build`/`run` invocation (the class of bug that
-# once broke setup for 100% of users).
+# Real end-to-end verification: a clean runner clones Redlib at the pinned commit, BUILDS the image from
+# source, brings the stack up via `setup`, and health-checks it — for BOTH engines. This is the only job
+# that exercises the real build/run path; the offline suite (ci.yml) mocks the engine, so it cannot catch
+# an engine-specific bug. `ps --filter publish=` is docker-only and crashed the WHOLE podman path,
+# undetected until a real podman run — which is exactly why podman is a lane here now.
 #
-# It is SLOW (Redlib is a from-source Rust build, up to ~20 min) and rebuilds from nothing on purpose
-# (no image cache — that would defeat "from scratch"), so it does NOT run on every push. Trigger it
-# manually (workflow_dispatch) or let the weekly schedule catch base-image / toolchain drift.
+# SLOW (from-source Rust build) and rebuilds from nothing on purpose (no cache), so it does NOT run per
+# push. Trigger manually (workflow_dispatch) or via the weekly schedule (base-image / toolchain drift).
 #
-# Only Linux is automated here: hosted ubuntu runners ship a running Docker daemon. macOS runners
-# need colima/podman-machine installed to get a real engine (finicky), and Windows hosted runners run
-# Docker in Windows-container mode without a reliable Linux backend — so real bring-up on those two
-# stays manual/periodic. Their pure-Node behavior is still covered by the 3-OS matrix in ci.yml.
+# Linux only: hosted ubuntu runners ship BOTH docker and podman. macOS runners need colima/podman-machine
+# (finicky) and Windows runs Docker in Windows-container mode without a reliable Linux backend, so real
+# bring-up on those stays manual/periodic — their pure-Node behavior is covered by the 3-OS matrix in ci.yml.
 
 on:
   workflow_dispatch:
@@ -21,9 +19,15 @@ on:
     - cron: '0 6 * * 1'   # Mondays 06:00 UTC
 
 jobs:
-  linux-from-scratch:
-    runs-on: ubuntu-latest
+  from-scratch:
+    strategy:
+      fail-fast: false          # see BOTH engines' results; a docker failure must not cancel podman
+      matrix:
+        engine: [docker, podman]
+    runs-on: ubuntu-latest      # hosted ubuntu ships both docker and podman
     timeout-minutes: 40
+    env:
+      ENGINE: ${{ matrix.engine }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,7 +40,7 @@ jobs:
           # Point registration at a throwaway file so we also exercise the config-write path, not just
           # the bring-up. (With this unset, setup would still succeed and just skip registration.)
           REDLIB_MCP_CLIENT_CONFIG: ${{ runner.temp }}/mcp-config.json
-        run: node dist/entry.js setup --yes --port 8080
+        run: node dist/entry.js setup --yes --port 8080 --engine "$ENGINE"
 
       - name: health check — Redlib serving 200 on :8080
         run: |
@@ -47,7 +51,7 @@ jobs:
             sleep 5
           done
           echo "Redlib never served 200 on :8080"
-          docker logs redlib-mcp || true
+          "$ENGINE" logs redlib-mcp || true
           exit 1
 
       - name: assert the MCP client config was written

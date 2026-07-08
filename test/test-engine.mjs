@@ -59,6 +59,17 @@ const existsAll = () => true; // pretend the absolute candidate paths are on dis
   assert.equal(await containerIdOnPort(eng, 7000, ports), null, 'no container on the port -> null');
   assert.equal(await containerIdOnPort(eng, 8080, async () => ({ stdout: '', stderr: '', code: 0 })), null, 'no containers -> null on a CLEAN exit');
 }
+// REGRESSION GUARD (dogfood 2026-07-08): the ps invocation must be ENGINE-AGNOSTIC. `--filter publish=`
+// is DOCKER-ONLY and crashes podman ("publish is an invalid filter") — it broke the entire podman path.
+// Assert the actual argv so a revert to the docker-only filter fails here immediately, not on a user's box.
+{
+  let psArgs = null;
+  const run = async (_file, args) => { if (args[0] === 'ps') psArgs = args; return { stdout: '', stderr: '', code: 0 }; };
+  await containerIdOnPort({ bin: '/usr/bin/podman', kind: 'podman' }, 8080, run);
+  assert.ok(psArgs, 'ps was invoked');
+  assert.ok(!psArgs.includes('--filter') && !psArgs.some(a => /publish/.test(a)), `ps must be podman-safe — no --filter publish: ${psArgs.join(' ')}`);
+  assert.ok(psArgs.join(' ').includes('{{.Ports}}'), 'ps must read the Ports column (a format both engines share)');
+}
 // --engine prefer: narrows detection to ONE kind (the `--engine docker|podman` flag).
 {
   const e = await detectEngine(mockRunner('podman').run, {}, existsAll, 'podman');
