@@ -20,5 +20,11 @@ for (const k of ['RATE_LIMITED', 'UPSTREAM_TOKEN_STALE', 'REDLIB_DOWN', 'CONTENT
   assert.ok(s.includes(k), `self-heal references the ${k} enum kind`);
 assert.ok(/register/i.test(s) && /client/i.test(s), 'instructs registering the MCP into the caller client');
 assert.ok(!/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u.test(s), 'SKILL.md must contain no emoji');
+
+// plugin-context guidance: when installed as a Claude Code plugin the MCP is already wired,
+// so setup must build-only (no second registration under key "redlib-mcp").
+assert.ok(/installed as a Claude Code plugin/i.test(s), 'skill has plugin-context guidance');
+assert.ok(/without `REDLIB_MCP_CLIENT_CONFIG`/.test(s), 'skill instructs build-only under the plugin');
+
 execFileSync('node', ['scripts/check-forbidden-words.mjs', 'skills/setup-redlib/SKILL.md']); // copy-tone check
 console.log('ALL PASS');

@@ -28,6 +28,12 @@ self-hosted Redlib backend. This skill installs and heals that backend via the `
 2. Confirm the server is registered in your client config, pointing at `redlib-mcp@1.0.0 serve`
    (an exact version — never a floating `npx redlib-mcp`).
 
+**If redlib-mcp is installed as a Claude Code plugin** (the `mcp__plugin_redlib-mcp_redlib__*` tools
+are already available), the MCP server is already registered by the plugin. Run `redlib-mcp setup`
+**without `REDLIB_MCP_CLIENT_CONFIG`** to build the backend only, and ignore the paste-ready entry it
+prints — do NOT register a second server. Only a standalone (non-plugin) install passes
+`REDLIB_MCP_CLIENT_CONFIG`.
+
 ## Self-heal (gated — never rebuild-storm)
 
 If an MCP tool call fails, do NOT reinstall blindly. Run `redlib-mcp doctor`, read the typed error
