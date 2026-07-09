@@ -23,4 +23,6 @@ const names = JSON.parse(packed)[0].files.map(f => f.path);
 assert.ok(names.some(n => n.startsWith('skills/')), 'packed tarball includes the skill');
 assert.ok(names.includes('server.json'), 'packed tarball includes server.json');
 assert.ok(names.some(n => n === 'LICENSE') && names.some(n => n === 'NOTICE'), 'packed tarball includes LICENSE + NOTICE');
+assert.ok(!names.some(n => n.startsWith('.claude-plugin/')), 'plugin manifests must NOT ship to npm');
+assert.ok(!names.includes('.mcp.json'), '.mcp.json must NOT ship to npm');
 console.log('ALL PASS');
