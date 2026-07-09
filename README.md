@@ -79,12 +79,12 @@ Commands run under **docker or podman**, chosen automatically (override with `--
 
 ## Usage
 
-Once the backend is up and the MCP is registered, ask your agent in plain language — it picks the right tool:
+Ask your agent a real question in plain language — it searches, reads the relevant threads, and synthesizes what the community actually says. You don't name the tools; it picks them.
 
-- "What are people saying about the migration in r/webdev this week?" -> `get_subreddit_posts` (top / this week), returning titles and top comments.
-- "Find recent posts about Redlib self-hosting." -> `search_reddit` on the keywords.
-- "Pull the full comment thread for this post: `<reddit-url>`" -> `get_post` with threaded comments.
-- "What has `u/<name>` submitted recently?" -> `get_user_activity`, handy for checking a source.
+- **Niche recommendations** — "What CLI file manager do people on Reddit recommend, and why?" The agent runs `search_reddit`, opens the top threads with `get_post`, and returns the consensus picks (yazi, ranger, nnn, ...) with the trade-offs people cite — the community's answer, not one blog's.
+- **Compare and weigh opinions** — "How do people compare Chakra UI and shadcn/ui, and which do they prefer for what?" It pulls discussions across subreddits and summarizes both camps: the developer-experience arguments, the "own your components" case, the migration gripes.
+- **Deep-dive one thread** — "Summarize the discussion on this post: `<reddit-url>`" pulls `get_post` with its threaded comments for the agent to distill.
+- **Vet a source** — "What has `u/<name>` posted recently?" runs `get_user_activity`, handy before you trust a hot take.
 
 Everything is read-only and served from your loopback Redlib; the agent never contacts reddit.com directly.
 
