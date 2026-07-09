@@ -1,6 +1,7 @@
 {
   "name": "redlib-mcp",
   "owner": { "name": "grazomarin" },
+  "description": "Read public Reddit through a private, self-hosted Redlib MCP server.",
   "plugins": [
     {
       "name": "redlib-mcp",
