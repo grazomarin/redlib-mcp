@@ -91,6 +91,12 @@ import { formatDoctor, runDoctor, cmdDoctor, run } from '../dist/cli.js';
 {
   assert.equal(await cmdDoctor(['--port', 'abc']), 2, 'invalid --port -> exit 2');
 }
+// hardened --port: out of range / bare value -> exit 2 (before touching the backend).
+{
+  assert.equal(await cmdDoctor(['--port', '999999']), 2, '--port > 65535 -> exit 2');
+  assert.equal(await cmdDoctor(['--port', '0']), 2, '--port 0 -> exit 2');
+  assert.equal(await cmdDoctor(['--port']), 2, 'bare --port (no value) -> exit 2, not a silent default');
+}
 // no --port -> health URL is the default local port (single source: always :8080, never a stale REDLIB_URL).
 {
   let seenUrl = null;

@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { parsePostDetails, pruneBFS, nextAfter } from '../dist/parse.js';
+import { parsePortFlag } from '../dist/cli.js';
 
 // Exercise the REAL parser (index.ts's core, now in parse.ts) against the captured fixture —
 // not a hand-rolled copy. A parser regression now fails offline instead of only in the live E2E.
@@ -38,5 +39,15 @@ const shape = () => [mk('a', [mk('a1', [mk('a1a')]), mk('a2')]), mk('b'), mk('c'
 // --- nextAfter cursor ---
 assert.equal(nextAfter('foo?after=t3_abc123&x=1'), 't3_abc123', 'extracts the after cursor');
 assert.equal(nextAfter('no cursor here'), null, 'no cursor -> null');
+
+// --- parsePortFlag: shared --port validation for setup/restart/update/doctor ---
+assert.equal(parsePortFlag({}).port, 8080, 'absent --port -> default 8080');
+assert.ok(parsePortFlag({ port: true }).err, 'bare --port (no value) -> error, not a silent default');
+assert.equal(parsePortFlag({ port: '9000' }).port, 9000, 'valid port parses');
+assert.ok(parsePortFlag({ port: '0' }).err, 'port 0 -> error');
+assert.ok(parsePortFlag({ port: '65536' }).err, 'port > 65535 -> error');
+assert.ok(parsePortFlag({ port: '80.5' }).err, 'non-integer -> error');
+assert.ok(parsePortFlag({ port: 'abc' }).err, 'non-numeric -> error');
+assert.equal(parsePortFlag({ port: '65535' }).port, 65535, 'ceiling port 65535 is valid');
 
 console.log('ALL PASS');

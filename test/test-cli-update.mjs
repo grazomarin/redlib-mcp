@@ -71,6 +71,22 @@ function baseDeps(overrides) {
 {
   assert.equal(await cmdUpdate(['--port', 'abc'], baseDeps({})), 2, 'invalid --port -> exit 2');
 }
+// hardened --port: out of range / bare value -> exit 2.
+{
+  assert.equal(await cmdUpdate(['--port', '999999'], baseDeps({})), 2, '--port > 65535 -> exit 2');
+  assert.equal(await cmdUpdate(['--port', '0'], baseDeps({})), 2, '--port 0 -> exit 2');
+  assert.equal(await cmdUpdate(['--port'], baseDeps({})), 2, 'bare --port -> exit 2');
+}
+// ceiling --port 65535 -> candidate temp port stays IN RANGE (65534, never an invalid 65536).
+{
+  const seen = { ports: [] };
+  await cmdUpdate(['--port', '65535'], baseDeps({
+    locateBackend: async () => ({ engine: { bin: 'docker', kind: 'docker' }, id: 'x' }),
+    runContainer: async (e, o) => { seen.ports.push(o.port); },
+  }));
+  assert.ok(seen.ports.includes(65534), `ceiling --port -> candidate 65534: ${seen.ports}`);
+  assert.ok(!seen.ports.includes(65536), 'candidate never binds an invalid 65536');
+}
 // update --help advertises --port
 {
   const orig = process.stderr.write.bind(process.stderr);

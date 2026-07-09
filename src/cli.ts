@@ -94,8 +94,9 @@ export function formatDoctor(results: DoctorResult[]): { text: string; exitCode:
 
 export async function cmdDoctor(argv: string[] = [], deps?: Partial<DoctorDeps>): Promise<number> {
   const flags = parseFlags(argv);
-  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
-  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
+  const pf = parsePortFlag(flags);
+  if (pf.err) { say(pf.err); return 2; }
+  const port = pf.port!;
   const eng = parseEngineFlag(flags);
   if (eng.err) { say(eng.err); return 2; }
   // doctor diagnoses the LOCAL container it manages, always on the resolved port — a single source
@@ -214,6 +215,21 @@ export function parseFlags(argv: string[]): Record<string, string | boolean> {
   return f;
 }
 
+// Shared `--port` parse for setup/restart/update/doctor. Absent flag -> DEFAULT_PORT; a bare `--port`
+// (no value) is an ERROR, not a silent default; the value must be an integer in the valid TCP range.
+export function parsePortFlag(flags: Record<string, string | boolean>): { port?: number; err?: string } {
+  const raw = flags.port;
+  if (raw === undefined) return { port: DEFAULT_PORT };
+  if (typeof raw !== "string") return { err: "invalid --port value: flag given with no value (expected an integer 1-65535)" };
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return { err: `invalid --port value: ${raw} (expected an integer 1-65535)` };
+  return { port };
+}
+
+// A free temp port adjacent to the main one for verify-before-swap; stays in the valid TCP range even
+// when the main port is at the 65535 ceiling.
+const candidatePort = (port: number): number => (port < 65535 ? port + 1 : port - 1);
+
 // Parse `--engine docker|podman` (shared by setup + restart). Returns the preferred kind, {} for
 // auto (docker-preferred), or a validation error. REDLIB_ENGINE (absolute path) still wins over this.
 function parseEngineFlag(flags: Record<string, string | boolean>): { prefer?: "docker" | "podman"; err?: string } {
@@ -278,8 +294,9 @@ function withSetupDefaults(deps?: Partial<SetupDeps>, prefer?: "docker" | "podma
 
 export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promise<number> {
   const flags = parseFlags(argv);
-  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
-  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
+  const pf = parsePortFlag(flags);
+  if (pf.err) { say(pf.err); return 2; }
+  const port = pf.port!;
   const host = flags["non-loopback"] ? "0.0.0.0" : "127.0.0.1";
   const eng = parseEngineFlag(flags);
   if (eng.err) { say(eng.err); return 2; }
@@ -316,7 +333,7 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
     say("verified: serving valid content.");
   } else {
     // Re-setup/repair with a live service: verify the candidate on a TEMP port before swapping.
-    const v = await verifyBeforeSwap(engine, d, buildTag, port + 1);
+    const v = await verifyBeforeSwap(engine, d, buildTag, candidatePort(port));
     if (v.decision === "promote") say("candidate verified and promoted to :latest. Restart the container to pick it up (or it will on next restart).");
     else if (v.decision === "discard") { say(`candidate DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`); return 5; }
     else { say(`candidate inconclusive (${v.lastKind}): ${v.detail}. Kept the current image serving; candidate retained as ${buildTag}. Re-run \`redlib-mcp update\` later to re-verify.`); return 6; }
@@ -368,8 +385,9 @@ export interface UpdateDeps {
 // a transient defers (keep old, re-verify later). The live service is never disrupted.
 export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Promise<number> {
   const flags = parseFlags(argv);
-  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
-  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
+  const pf = parsePortFlag(flags);
+  if (pf.err) { say(pf.err); return 2; }
+  const port = pf.port!;
   const eng = parseEngineFlag(flags);
   if (eng.err) { say(eng.err); return 2; }
   const d: UpdateDeps = {
@@ -395,7 +413,7 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
     await d.buildImage(dir, buildTag, engine);
   });
 
-  const v = await verifyBeforeSwap(engine, d, buildTag, port + 1);
+  const v = await verifyBeforeSwap(engine, d, buildTag, candidatePort(port));
   if (v.decision === "promote") { say("update verified and promoted to :latest. Restart the container to apply."); return 0; }
   if (v.decision === "discard") { say(`update DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`); return 5; }
   // defer: inconclusive — verifyBeforeSwap kept the candidate image unpromoted; do NOT delete it (that
@@ -419,8 +437,9 @@ export async function cmdRestart(argv: string[], deps?: Partial<RestartDeps>): P
   const flags = parseFlags(argv);
   const eng = parseEngineFlag(flags);
   if (eng.err) { say(eng.err); return 2; }
-  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
-  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
+  const pf = parsePortFlag(flags);
+  if (pf.err) { say(pf.err); return 2; }
+  const port = pf.port!;
   const d: RestartDeps = {
     locateBackend: (p, prefer) => locateBackend(p, prefer),
     daemonReachable: (e) => daemonReachable(e),
