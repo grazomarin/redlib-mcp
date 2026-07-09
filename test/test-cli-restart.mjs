@@ -59,4 +59,11 @@ import { cmdRestart } from '../dist/cli.js';
   assert.equal(code, 2, `invalid --engine -> 2, got ${code}`);
 }
 
+// hardened --port is validated (and BEFORE locating anything): out-of-range / bare -> exit 2.
+{
+  const guard = { locateBackend: async () => { throw new Error('must not locate on invalid --port'); }, daemonReachable: async () => true, restartContainer: async () => {}, waitHealthy: async () => true };
+  assert.equal(await cmdRestart(['--port', '999999'], guard), 2, 'restart --port > 65535 -> exit 2');
+  assert.equal(await cmdRestart(['--port'], guard), 2, 'restart bare --port -> exit 2');
+}
+
 console.log('ALL PASS');

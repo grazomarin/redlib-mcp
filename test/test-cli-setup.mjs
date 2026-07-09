@@ -179,4 +179,28 @@ import { parseFlags, serverEntry, cmdSetup } from '../dist/cli.js';
   assert.ok(out.includes('serve'), 'prints the serve arg');
   assert.ok(/claude mcp add redlib-mcp/.test(out), 'prints the claude mcp add one-liner');
 }
+// hardened --port is wired into setup (behavior changed from the old parse): out-of-range / bare -> exit 2.
+{
+  assert.equal(await cmdSetup(['--port', '999999']), 2, 'setup --port > 65535 -> exit 2');
+  assert.equal(await cmdSetup(['--port']), 2, 'setup bare --port -> exit 2');
+}
+// setup at the 65535 ceiling -> the re-setup candidate temp port stays IN RANGE (65534, never 65536).
+{
+  const order = [];
+  const deps = {
+    detectEngine: async () => ({ bin: 'docker', kind: 'docker' }), daemonReachable: async () => true,
+    cloneAtPin: async () => {}, buildImage: async () => {},
+    containerIdOnPort: async () => 'existing123',   // re-setup path -> verify the candidate on a temp port
+    runContainer: async (e, o) => { order.push('run:' + o.port); },
+    tagImage: async () => {}, removeImage: async () => {}, stopContainer: async () => {},
+    waitHealthy: async () => true,
+    verifyCandidate: async () => ({ decision: 'promote', lastKind: 'VALID', detail: '' }),
+    withBuildLock: async (fn) => fn(),
+    resolveClientConfig: () => '', version: '1.0.0',
+  };
+  const code = await cmdSetup(['--port', '65535', '--yes', '--print-only'], deps);
+  assert.equal(code, 0, 'ceiling re-setup succeeds');
+  assert.ok(order.includes('run:65534'), `ceiling candidate clamps to 65534: ${order}`);
+  assert.ok(!order.includes('run:65536'), 'candidate never binds an invalid 65536');
+}
 console.log('ALL PASS');
