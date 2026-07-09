@@ -5,10 +5,12 @@ A private, self-hosted window into public Reddit for your AI agent — no login,
 `redlib-mcp` is a Model Context Protocol (MCP) server that lets an AI agent read public Reddit content through a self-hosted [Redlib](https://github.com/redlib-org/redlib) instance that you run and control. It ships three parts that work together:
 
 - an **MCP server** (the reader — four tools),
-- a **cross-platform CLI** (`redlib-mcp setup | restart | update | doctor`) — friendly to both humans and AI agents — that installs and operates the Redlib backend, and
+- a **cross-platform CLI** (`redlib-mcp setup | restart | update | doctor`) that installs and operates the Redlib backend, and
 - a **setup skill** that drives the CLI from your agent.
 
 Redlib itself is never bundled — the CLI clones and builds it from a pinned, reviewed upstream commit on your machine.
+
+**Requirements:** Docker or Podman, plus Node.js (the MCP server and CLI run via `npx`; CI-tested on Node 20).
 
 ## Install
 
@@ -40,7 +42,7 @@ npx -y redlib-mcp@1.0.0 setup
 
 `setup` resolves docker or podman, clones + builds Redlib from source at the pinned reviewed commit,
 brings it up bound to `127.0.0.1:8080`, verifies it end to end, and (with your confirmation) registers
-the MCP into your client config. The plugin and the paste-ready snippet target port `8080`; if you run
+the MCP into your client config. The plugin and the CLI both target port `8080` by default; if you run
 `setup --port <n>`, set `REDLIB_URL` in the MCP entry yourself. See `redlib-mcp doctor` if anything is off.
 
 ## CLI
@@ -74,6 +76,23 @@ Commands run under **docker or podman**, chosen automatically (override with `--
 | `get_subreddit_posts` | a subreddit's posts (hot/top/new/rising) + pagination |
 | `get_post` | one post with threaded comments |
 | `get_user_activity` | a user's recent submissions (source-vetting) |
+
+## Usage
+
+Once the backend is up and the MCP is registered, ask your agent in plain language — it picks the right tool:
+
+- "What are people saying about the migration in r/webdev this week?" -> `get_subreddit_posts` (top / this week), returning titles and top comments.
+- "Find recent posts about Redlib self-hosting." -> `search_reddit` on the keywords.
+- "Pull the full comment thread for this post: `<reddit-url>`" -> `get_post` with threaded comments.
+- "What has `u/<name>` submitted recently?" -> `get_user_activity`, handy for checking a source.
+
+Everything is read-only and served from your loopback Redlib; the agent never contacts reddit.com directly.
+
+## Limitations
+
+- **Read-only, public content only.** Posts, comments, and user submissions — it cannot post, vote, message, or reach login-gated content.
+- **Follows upstream Redlib.** Reddit periodically changes how its data is served, which can make reads start failing while the container stays up. `redlib-mcp restart` refetches and usually recovers; `redlib-mcp update` moves to a newer reviewed Redlib on a release. If it persists at the current pin, it is upstream, not your setup.
+- **Paced by design.** A conservative request cap (`REDLIB_MIN_INTERVAL_MS`, default 300 ms) spaces requests to your backend.
 
 ## Configuration
 
