@@ -46,6 +46,29 @@ brings it up bound to `127.0.0.1:8080`, verifies it end to end, and (with your c
 the MCP into your client config. The plugin and the CLI both target port `8080` by default; if you run
 `setup --port <n>`, set `REDLIB_URL` in the MCP entry yourself. See `redlib-mcp doctor` if anything is off.
 
+## Updating
+
+Getting a **new release of `redlib-mcp`** is separate from the `redlib-mcp update` CLI command below
+(which only rebuilds the *backend* at its pinned commit). New releases do **not** arrive automatically:
+a self-hosted, third-party install stays on the version you first installed until you update it.
+
+**Claude Code plugin:**
+
+```
+/plugin marketplace update redlib-mcp          # fetch the latest release
+claude plugin update redlib-mcp@redlib-mcp     # apply it
+/reload-plugins                                # activate without a restart
+```
+
+Or enable it once: in `/plugin`, open the **Marketplaces** tab, select `redlib-mcp`, and turn on
+auto-update, so future releases install at startup.
+
+**Other clients (skill install):** re-run `npx skills add grazomarin/redlib-mcp` (or `npx skills
+update`) to pull the latest skill, and bump the version in your `npx -y redlib-mcp@<version>` MCP entry.
+
+If a release moves the pinned Redlib commit, run `redlib-mcp update` afterward to rebuild the backend at
+the new pin.
+
 ## CLI
 
 The `redlib-mcp` command is **usable directly by a human** from a terminal and **equally drivable by an AI agent** — the same commands either way. Run `redlib-mcp` for the command list, or `redlib-mcp <command> --help` for a command's flags.
