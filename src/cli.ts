@@ -435,11 +435,11 @@ export interface RestartDeps {
 // calls this on UPSTREAM_TOKEN_STALE / REDLIB_DOWN.
 export async function cmdRestart(argv: string[], deps?: Partial<RestartDeps>): Promise<number> {
   const flags = parseFlags(argv);
-  const eng = parseEngineFlag(flags);
-  if (eng.err) { say(eng.err); return 2; }
   const pf = parsePortFlag(flags);
   if (pf.err) { say(pf.err); return 2; }
   const port = pf.port!;
+  const eng = parseEngineFlag(flags);
+  if (eng.err) { say(eng.err); return 2; }
   const d: RestartDeps = {
     locateBackend: (p, prefer) => locateBackend(p, prefer),
     daemonReachable: (e) => daemonReachable(e),
