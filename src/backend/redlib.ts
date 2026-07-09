@@ -45,7 +45,7 @@ export class RedlibBackend implements Backend {
           if (attempt < 2) { await sleep(400 * (attempt + 1)); continue; }
           throw lastErr;
         }
-        if (e?.code === "ECONNREFUSED" || e?.code === "ECONNRESET") throw new RedlibError("REDLIB_DOWN", `Redlib not reachable at ${url} (${e.code}) — is the container running?`);
+        if (e?.code === "ECONNREFUSED" || e?.code === "ECONNRESET") throw new RedlibError("REDLIB_DOWN", `Redlib not reachable at ${url} (${e.code}) — the backend isn't running. Run "redlib-mcp setup" to build and start it, or "redlib-mcp doctor" to diagnose.`);
         throw new RedlibError("PARSE_ERROR", `Redlib request failed for ${url}: ${e?.message || e}`);
       }
     }

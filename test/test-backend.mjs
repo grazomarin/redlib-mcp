@@ -36,7 +36,7 @@ await assert.rejects(() => mk(() => resp(500, 'boom')).fetch('/x'), (e) => e.kin
 await assert.rejects(() => mk(() => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }).fetch('/x'), (e) => e.kind === 'REDLIB_DOWN', 'AbortError -> REDLIB_DOWN');
 // a non-HTML 200 (a block/JSON page) never reaches the parser -> PARSE_ERROR, and NOT retried
 await assert.rejects(() => mk(() => resp(200, '{}', 'application/json')).fetch('/x'), (e) => e.kind === 'PARSE_ERROR', 'non-HTML content-type -> PARSE_ERROR');
-// ECONNREFUSED -> REDLIB_DOWN (container not up)
-await assert.rejects(() => mk(() => { const e = new Error('refused'); e.code = 'ECONNREFUSED'; throw e; }).fetch('/x'), (e) => e.kind === 'REDLIB_DOWN', 'ECONNREFUSED -> REDLIB_DOWN');
+// ECONNREFUSED -> REDLIB_DOWN (container not up); message must point at the fix
+await assert.rejects(() => mk(() => { const e = new Error('refused'); e.code = 'ECONNREFUSED'; throw e; }).fetch('/x'), (e) => e.kind === 'REDLIB_DOWN' && /redlib-mcp setup/.test(e.message), 'ECONNREFUSED -> REDLIB_DOWN naming `redlib-mcp setup`');
 
 console.log('ALL PASS');
