@@ -12,14 +12,36 @@ Redlib itself is never bundled — the CLI clones and builds it from a pinned, r
 
 ## Install
 
+**Claude Code — install as a plugin** (skill + MCP server in one install):
+
+```
+/plugin marketplace add grazomarin/redlib-mcp
+/plugin install redlib-mcp@redlib-mcp
+```
+
+Enable it (on Claude Code 2.1.154+ it installs disabled until you opt in; older versions enable on
+install), then build the backend once:
+
 ```bash
-# 1. install the setup skill into your agent (Claude Code / Codex / Cursor / Gemini CLI)
+redlib-mcp setup            # builds the Redlib container; the `serve` MCP is already wired by the plugin
+```
+
+Until that first build finishes (a multi-minute compile), the `redlib` MCP shows connected but its
+tools return `REDLIB_DOWN`. Run `/reload-plugins` after setup completes in the current session.
+
+**Other clients (Codex / Cursor / Gemini CLI) — install the skill:**
+
+```bash
+# install the setup skill into your agent
 npx skills add grazomarin/redlib-mcp
-# 2. let your agent run it, or run the CLI directly:
+# then let your agent run it, or run the CLI directly:
 npx -y redlib-mcp@1.0.0 setup
 ```
 
-`setup` resolves docker or podman, clones + builds Redlib from source at the pinned reviewed commit, brings it up bound to `127.0.0.1:8080`, verifies it end to end, and (with your confirmation) registers the MCP into your client config. See `redlib-mcp doctor` if anything is off.
+`setup` resolves docker or podman, clones + builds Redlib from source at the pinned reviewed commit,
+brings it up bound to `127.0.0.1:8080`, verifies it end to end, and (with your confirmation) registers
+the MCP into your client config. The plugin and the paste-ready snippet target port `8080`; if you run
+`setup --port <n>`, set `REDLIB_URL` in the MCP entry yourself. See `redlib-mcp doctor` if anything is off.
 
 ## CLI
 
