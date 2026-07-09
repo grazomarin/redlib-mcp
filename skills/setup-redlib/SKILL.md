@@ -15,7 +15,7 @@ self-hosted Redlib backend. This skill installs and heals that backend via the `
    it to `127.0.0.1:8080`, and verifies it end to end):
 
    ```bash
-   REDLIB_MCP_CLIENT_CONFIG=<this agent's client config path> npx -y redlib-mcp@1.0.0 setup --yes
+   REDLIB_MCP_CLIENT_CONFIG=<this agent's client config path> npx -y redlib-mcp@1.0.1 setup --yes
    ```
 
    Set `REDLIB_MCP_CLIENT_CONFIG` (the env var the CLI reads) to THIS agent's own client config file
@@ -25,7 +25,7 @@ self-hosted Redlib backend. This skill installs and heals that backend via the `
    (Without a config path, `setup` still succeeds — it just skips registration and you add the server
    entry yourself.)
 
-2. Confirm the server is registered in your client config, pointing at `redlib-mcp@1.0.0 serve`
+2. Confirm the server is registered in your client config, pointing at `redlib-mcp@1.0.1 serve`
    (an exact version — never a floating `npx redlib-mcp`).
 
 **If redlib-mcp is installed as a Claude Code plugin** (the `mcp__plugin_redlib-mcp_redlib__*` tools
