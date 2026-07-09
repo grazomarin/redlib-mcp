@@ -35,14 +35,16 @@ export interface DoctorDeps {
   hostArch: () => string;
   imageArch: (e: Engine, tag: string) => Promise<string>;
   url: string;
+  port?: number;
 }
 
 export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
   const out: DoctorResult[] = [];
+  const port = deps.port ?? DEFAULT_PORT;
   let engine: Engine, id: string | null;
   // Locate the backend across BOTH engines — on a dual-engine machine it may be on the non-preferred one.
   try {
-    ({ engine, id } = await deps.locateBackend(DEFAULT_PORT));
+    ({ engine, id } = await deps.locateBackend(port));
     out.push({ check: "engine", ok: true, detail: `${engine.kind} (${engine.bin})${id ? " — hosts the backend" : ""}` });
   } catch (e: any) {
     out.push({ check: "engine", ok: false, detail: String(e?.message || e), fix: "Install Docker Desktop or Podman; ensure it is on PATH." });
@@ -53,7 +55,7 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorResult[]> {
   out.push({ check: "daemon", ok: daemon, detail: daemon ? "reachable" : "unreachable", fix: daemon ? undefined : "Start Docker Desktop / the Docker daemon (mac/Win: check 'launch at login')." });
   if (!daemon) return out;
 
-  out.push({ check: `container on :${DEFAULT_PORT}`, ok: !!id, detail: id ? `running (${id})` : "not running", fix: id ? undefined : "Run `redlib-mcp setup` to build and start the Redlib backend." });
+  out.push({ check: `container on :${port}`, ok: !!id, detail: id ? `running (${id})` : "not running", fix: id ? undefined : "Run `redlib-mcp setup` to build and start the Redlib backend. If you ran `setup --port <n>`, pass the same `--port` to doctor." });
   if (!id) return out;
 
   const healthy = await deps.waitHealthy(deps.url);

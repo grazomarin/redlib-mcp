@@ -55,4 +55,22 @@ import { formatDoctor, runDoctor } from '../dist/cli.js';
   assert.ok(results.every(r => r.ok), `all checks green, failing: ${results.filter(r => !r.ok).map(r => r.check)}`);
   assert.ok(results[0].detail.includes('podman') && /hosts the backend/.test(results[0].detail), 'engine check notes podman hosts the backend');
 }
+// runDoctor threads deps.port into locateBackend + the container label, and the container-down
+// fix hints about --port.
+{
+  let seenPort = null;
+  const deps = {
+    port: 9000,
+    locateBackend: async (p) => { seenPort = p; return { engine: { bin: 'podman', kind: 'podman' }, id: null }; },
+    daemonReachable: async () => true,
+    waitHealthy: async () => false,
+    verifyCandidate: async () => ({ decision: 'defer', lastKind: 'REDLIB_DOWN', detail: '' }),
+    hostArch: () => 'amd64', imageArch: async () => 'amd64', url: 'http://127.0.0.1:9000',
+  };
+  const results = await runDoctor(deps);
+  assert.equal(seenPort, 9000, 'locateBackend called with the injected port');
+  const container = results.find(r => /container/i.test(r.check));
+  assert.ok(container.check.includes(':9000'), 'container label shows the custom port');
+  assert.ok(/--port/.test(container.fix), 'container-down fix hints about --port');
+}
 console.log('ALL PASS');
