@@ -4,7 +4,6 @@ import {
   type Engine,
 } from "./engine.js";
 import { verifyCandidate } from "./verify.js";
-import { resolveRedlibUrl } from "./config.js";
 import { cloneDir, buildLockPath } from "./paths.js";
 import { REDLIB_PIN } from "./pin.js";
 import { mergeServer, writeAtomic, diffLines, type ServerEntry } from "./config-write.js";
@@ -93,19 +92,25 @@ export function formatDoctor(results: DoctorResult[]): { text: string; exitCode:
   return { text: lines.join("\n"), exitCode: failed ? 1 : 0 };
 }
 
-async function cmdDoctor(argv: string[] = []): Promise<number> {
+export async function cmdDoctor(argv: string[] = [], deps?: Partial<DoctorDeps>): Promise<number> {
   const flags = parseFlags(argv);
+  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
+  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
   const eng = parseEngineFlag(flags);
   if (eng.err) { say(eng.err); return 2; }
-  const url = resolveRedlibUrl();
+  // doctor diagnoses the LOCAL container it manages, always on the resolved port — a single source
+  // of truth so location and the health/smoke probe can never target different ports.
+  const url = `http://127.0.0.1:${port}`;
   const results = await runDoctor({
-    locateBackend: (port) => locateBackend(port, eng.prefer),
+    port,
+    locateBackend: (p) => locateBackend(p, eng.prefer),
     daemonReachable: (e) => daemonReachable(e),
-    waitHealthy: (u) => waitHealthy(u, { tries: 3, delayMs: 1000 }), // doctor fast-fails (~3s); the 60s budget is for setup's post-build bring-up
+    waitHealthy: (u) => waitHealthy(u, { tries: 3, delayMs: 1000 }), // doctor fast-fails (~3s)
     verifyCandidate: (u) => verifyCandidate(u),
     hostArch: () => hostArch(),
     imageArch: (e, tag) => imageArch(e, tag),
     url,
+    ...deps,
   });
   const { text, exitCode } = formatDoctor(results);
   say(text);
@@ -138,7 +143,7 @@ const CMD_HELP: Record<string, string> = {
     "redlib-mcp doctor — diagnose the backend and print how to fix each problem.\n" +
     "  Checks engine, daemon, container, HTTP health, end-to-end content, and image arch — and finds the\n" +
     "  backend on docker OR podman automatically.\n" +
-    "  Flags: --engine docker|podman",
+    "  Flags: --port <n> (default 8080), --engine docker|podman",
   serve:
     "redlib-mcp serve — run the MCP server over stdio (this is what your MCP client launches).\n" +
     "  Env: REDLIB_URL (default http://127.0.0.1:8080). Set USE_HTTP=true to serve over loopback HTTP at\n" +
