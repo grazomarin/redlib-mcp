@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { cmdUpdate } from '../dist/cli.js';
+import { cmdUpdate, run } from '../dist/cli.js';
 
 function baseDeps(overrides) {
   return {
@@ -55,5 +55,28 @@ function baseDeps(overrides) {
   }));
   assert.ok(seen.tags.every(t => t.includes('building') || t.includes('candidate')), `temp build tag only: ${seen.tags}`);
   assert.ok(seen.ports.every(p => p !== 8080), `candidate never binds :8080: ${seen.ports}`);
+}
+// --port threads into locateBackend AND the candidate temp port (port + 1).
+{
+  let locatedPort = null;
+  const seen = { ports: [] };
+  await cmdUpdate(['--port', '9000'], baseDeps({
+    locateBackend: async (p) => { locatedPort = p; return { engine: { bin: 'docker', kind: 'docker' }, id: 'x' }; },
+    runContainer: async (e, o) => { seen.ports.push(o.port); },
+  }));
+  assert.equal(locatedPort, 9000, 'update locates the backend on --port');
+  assert.ok(seen.ports.includes(9001), `candidate runs on port+1 (9001): ${seen.ports}`);
+}
+// invalid --port -> exit 2.
+{
+  assert.equal(await cmdUpdate(['--port', 'abc'], baseDeps({})), 2, 'invalid --port -> exit 2');
+}
+// update --help advertises --port
+{
+  const orig = process.stderr.write.bind(process.stderr);
+  let out = '';
+  process.stderr.write = (s) => { out += s; return true; };
+  try { await run(['update', '--help']); } finally { process.stderr.write = orig; }
+  assert.ok(/--port/.test(out), 'update --help lists --port');
 }
 console.log('ALL PASS');

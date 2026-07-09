@@ -138,7 +138,7 @@ const CMD_HELP: Record<string, string> = {
     "redlib-mcp update — rebuild Redlib at the pinned commit; promote only if it verifies.\n" +
     "  Builds to a temp tag, checks it serves valid content on a temp port, then swaps :latest. Never\n" +
     "  tracks upstream HEAD unattended. Restart the container afterwards to pick up the new image.\n" +
-    "  Flags: --engine docker|podman",
+    "  Flags: --port <n> (default 8080), --engine docker|podman",
   doctor:
     "redlib-mcp doctor — diagnose the backend and print how to fix each problem.\n" +
     "  Checks engine, daemon, container, HTTP health, end-to-end content, and image arch — and finds the\n" +
@@ -368,6 +368,8 @@ export interface UpdateDeps {
 // a transient defers (keep old, re-verify later). The live service is never disrupted.
 export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Promise<number> {
   const flags = parseFlags(argv);
+  const port = parseInt(typeof flags.port === "string" ? flags.port : String(DEFAULT_PORT), 10);
+  if (!Number.isFinite(port) || port <= 0) { say(`invalid --port value: ${String(flags.port)}`); return 2; }
   const eng = parseEngineFlag(flags);
   if (eng.err) { say(eng.err); return 2; }
   const d: UpdateDeps = {
@@ -381,7 +383,7 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
   };
   // Build on the engine that HOSTS the backend (dual-engine machine) so the promoted :latest lands in the
   // store the running container actually reads — else the update would be invisible to it.
-  const { engine } = await d.locateBackend(DEFAULT_PORT, eng.prefer);
+  const { engine } = await d.locateBackend(port, eng.prefer);
   if (!(await d.daemonReachable(engine))) { say("daemon not reachable; start it and re-run."); return 3; }
 
   const dir = cloneDir();
@@ -393,7 +395,7 @@ export async function cmdUpdate(argv: string[], deps?: Partial<UpdateDeps>): Pro
     await d.buildImage(dir, buildTag, engine);
   });
 
-  const v = await verifyBeforeSwap(engine, d, buildTag, DEFAULT_PORT + 1);
+  const v = await verifyBeforeSwap(engine, d, buildTag, port + 1);
   if (v.decision === "promote") { say("update verified and promoted to :latest. Restart the container to apply."); return 0; }
   if (v.decision === "discard") { say(`update DISCARDED (${v.lastKind}): ${v.detail}. Kept the current image.`); return 5; }
   // defer: inconclusive — verifyBeforeSwap kept the candidate image unpromoted; do NOT delete it (that
