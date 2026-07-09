@@ -17,5 +17,6 @@ assert.ok(skill.includes(HOOK), 'SKILL.md frontmatter description');
 
 // copy-tone check over EVERY public surface at once
 execFileSync('node', ['scripts/check-forbidden-words.mjs',
-  'README.md', 'package.json', 'server.json', 'skills/setup-redlib/SKILL.md', 'NOTICE']);
+  'README.md', 'package.json', 'server.json', 'skills/setup-redlib/SKILL.md', 'NOTICE',
+  '.claude-plugin/plugin.json', '.claude-plugin/marketplace.json']);
 console.log('ALL PASS');

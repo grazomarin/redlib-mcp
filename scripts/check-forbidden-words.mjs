@@ -11,6 +11,7 @@ const files = process.argv.slice(2);
 const targets = files.length ? files : [
   'README.md', 'package.json', 'skills/setup-redlib/SKILL.md', 'src/index.ts',
   'server.json', 'NOTICE',
+  '.claude-plugin/plugin.json', '.claude-plugin/marketplace.json',
 ];
 
 let hits = 0;
