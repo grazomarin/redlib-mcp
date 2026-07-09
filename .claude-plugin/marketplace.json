@@ -1,0 +1,11 @@
+{
+  "name": "redlib-mcp",
+  "owner": { "name": "grazomarin" },
+  "plugins": [
+    {
+      "name": "redlib-mcp",
+      "source": "./",
+      "description": "Read public Reddit through a private, self-hosted Redlib MCP server — no login, no tracking."
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "redlib": {
+      "command": "npx",
+      "args": ["-y", "redlib-mcp@1.0.0", "serve"]
+    }
+  }
+}

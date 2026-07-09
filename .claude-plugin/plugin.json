@@ -1,0 +1,11 @@
+{
+  "name": "redlib-mcp",
+  "version": "1.0.0",
+  "description": "Read public Reddit through a private, self-hosted Redlib MCP server — no login, no tracking.",
+  "author": { "name": "Kamran Huseynov (grazomarin)" },
+  "homepage": "https://github.com/grazomarin/redlib-mcp#readme",
+  "repository": "https://github.com/grazomarin/redlib-mcp",
+  "license": "MIT",
+  "keywords": ["mcp", "redlib", "reddit"],
+  "defaultEnabled": false
+}
