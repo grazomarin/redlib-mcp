@@ -21,15 +21,16 @@ Redlib itself is never bundled — the CLI clones and builds it from a pinned, r
 /plugin install redlib-mcp@redlib-mcp
 ```
 
-Enable it (on Claude Code 2.1.154+ it installs disabled until you opt in; older versions enable on
-install), then build the backend once:
+The plugin installs **enabled**, so the `redlib` MCP server and the `setup-redlib` skill are wired
+immediately. **The MCP tools do not work until you build the backend once** — enabling the plugin only
+loads the wiring, not the Redlib instance the tools read from. Run:
 
 ```bash
-redlib-mcp setup            # builds the Redlib container; the `serve` MCP is already wired by the plugin
+redlib-mcp setup            # clones + builds the Redlib container; the `serve` MCP is already wired by the plugin
 ```
 
-Until that first build finishes (a multi-minute compile), the `redlib` MCP shows connected but its
-tools return `REDLIB_DOWN`. Run `/reload-plugins` after setup completes in the current session.
+Until that first build finishes (a multi-minute compile), the `redlib` MCP shows connected but every
+tool returns `REDLIB_DOWN`. Run `/reload-plugins` (or start a new session) once setup completes.
 
 **Other clients (Codex / Cursor / Gemini CLI) — install the skill:**
 

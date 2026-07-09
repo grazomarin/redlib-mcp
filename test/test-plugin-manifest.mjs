@@ -14,7 +14,7 @@ assert.equal(mkt.plugins[0].source, './', 'plugin entry source is the repo root'
 
 // plugin.json — manifest
 assert.equal(plg.name, 'redlib-mcp', 'plugin name');
-assert.equal(plg.defaultEnabled, false, 'installs disabled (opt-in)');
+assert.ok(!('defaultEnabled' in plg), 'no defaultEnabled key -> installs enabled (setup gates function, not enablement)');
 
 // .mcp.json — auto-discovered MCP server: npx + serve + pinned, NO hardcoded env
 assert.equal(mcp.mcpServers?.redlib?.command, 'npx', 'server command is npx');

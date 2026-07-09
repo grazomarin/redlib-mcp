@@ -6,6 +6,5 @@
   "homepage": "https://github.com/grazomarin/redlib-mcp#readme",
   "repository": "https://github.com/grazomarin/redlib-mcp",
   "license": "MIT",
-  "keywords": ["mcp", "redlib", "reddit"],
-  "defaultEnabled": false
+  "keywords": ["mcp", "redlib", "reddit"]
 }
