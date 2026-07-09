@@ -120,6 +120,12 @@ The MCP talks only to your own loopback Redlib and never contacts reddit.com dir
 
 The code targets all three (Node + Docker Desktop / Podman); the labels reflect test coverage, not intent.
 
+## Support
+
+`redlib-mcp` is free and open source. If it saves you time, you can support its upkeep:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-grazomarin-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/grazomarin)
+
 ## Your responsibility
 
 You run and control the Redlib backend on your own machine. You are responsible for your use of it and for complying with the terms of the services you access. This project does not host any instance and ships no credentials.
