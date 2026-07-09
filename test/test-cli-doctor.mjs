@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { formatDoctor, runDoctor } from '../dist/cli.js';
+import { formatDoctor, runDoctor, cmdDoctor, run } from '../dist/cli.js';
 
 // formatDoctor: any failing check -> non-zero exit + the fix text is shown.
 {
@@ -72,5 +72,43 @@ import { formatDoctor, runDoctor } from '../dist/cli.js';
   const container = results.find(r => /container/i.test(r.check));
   assert.ok(container.check.includes(':9000'), 'container label shows the custom port');
   assert.ok(/--port/.test(container.fix), 'container-down fix hints about --port');
+}
+// cmdDoctor parses --port and threads it into BOTH locateBackend and the health URL.
+{
+  let seenPort = null, seenUrl = null;
+  const rc = await cmdDoctor(['--port', '9000'], {
+    locateBackend: async (p) => { seenPort = p; return { engine: { bin: 'podman', kind: 'podman' }, id: 'abc' }; },
+    daemonReachable: async () => true,
+    waitHealthy: async (u) => { seenUrl = u; return true; },
+    verifyCandidate: async () => ({ decision: 'promote', lastKind: 'VALID', detail: '' }),
+    hostArch: () => 'amd64', imageArch: async () => 'amd64',
+  });
+  assert.equal(seenPort, 9000, 'cmdDoctor threads --port into locateBackend');
+  assert.equal(seenUrl, 'http://127.0.0.1:9000', 'cmdDoctor threads --port into the health URL');
+  assert.equal(rc, 0, 'all-green doctor exits 0');
+}
+// invalid --port -> exit 2 before touching the backend.
+{
+  assert.equal(await cmdDoctor(['--port', 'abc']), 2, 'invalid --port -> exit 2');
+}
+// no --port -> health URL is the default local port (single source: always :8080, never a stale REDLIB_URL).
+{
+  let seenUrl = null;
+  await cmdDoctor([], {
+    locateBackend: async () => ({ engine: { bin: 'docker', kind: 'docker' }, id: 'abc' }),
+    daemonReachable: async () => true,
+    waitHealthy: async (u) => { seenUrl = u; return true; },
+    verifyCandidate: async () => ({ decision: 'promote', lastKind: 'VALID', detail: '' }),
+    hostArch: () => 'amd64', imageArch: async () => 'amd64',
+  });
+  assert.equal(seenUrl, 'http://127.0.0.1:8080', 'no --port -> health URL is the default local port');
+}
+// doctor --help advertises --port
+{
+  const orig = process.stderr.write.bind(process.stderr);
+  let out = '';
+  process.stderr.write = (s) => { out += s; return true; };
+  try { await run(['doctor', '--help']); } finally { process.stderr.write = orig; }
+  assert.ok(/--port/.test(out), 'doctor --help lists --port');
 }
 console.log('ALL PASS');
