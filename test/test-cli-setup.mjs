@@ -155,4 +155,28 @@ import { parseFlags, serverEntry, cmdSetup } from '../dist/cli.js';
   const code = await cmdSetup(['--yes'], deps); // no cfg path, no --print-only -> must not writeAtomic("")
   assert.equal(code, 0, 'empty cfg path must skip registration, not crash setup');
 }
+// no-cfgPath branch PRINTS a paste-ready mcpServers entry (not just "skipping").
+{
+  const chunks = [];
+  const orig = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (s) => { chunks.push(String(s)); return true; };
+  const deps = {
+    detectEngine: async () => ({ bin: 'docker', kind: 'docker' }), daemonReachable: async () => true,
+    cloneAtPin: async () => {}, buildImage: async () => {},
+    containerIdOnPort: async () => null, runContainer: async () => {},
+    tagImage: async () => {}, removeImage: async () => {}, stopContainer: async () => {},
+    waitHealthy: async () => true,
+    verifyCandidate: async () => ({ decision: 'promote', lastKind: 'VALID', detail: '' }),
+    withBuildLock: async (fn) => fn(),
+    resolveClientConfig: () => '', version: '1.2.3',
+  };
+  let code;
+  try { code = await cmdSetup(['--yes'], deps); } finally { process.stderr.write = orig; }
+  const out = chunks.join('');
+  assert.equal(code, 0, 'no-cfgPath still exits 0');
+  assert.ok(out.includes('"redlib-mcp"'), 'prints the mcpServers key');
+  assert.ok(out.includes('redlib-mcp@1.2.3'), 'prints the exact-version pin from serverEntry');
+  assert.ok(out.includes('serve'), 'prints the serve arg');
+  assert.ok(/claude mcp add redlib-mcp/.test(out), 'prints the claude mcp add one-liner');
+}
 console.log('ALL PASS');

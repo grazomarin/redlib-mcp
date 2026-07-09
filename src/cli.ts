@@ -317,10 +317,20 @@ export async function cmdSetup(argv: string[], deps?: Partial<SetupDeps>): Promi
 
   // Register the MCP into the caller's client config (atomic, diff + confirm).
   const cfgPath = d.resolveClientConfig();
-  // No config path (env unset, no --client) -> the backend is ready; skip registration rather than
-  // crash. writeAtomic("") would renameSync into "" and throw ENOENT AFTER a successful build.
-  // the setup skill supplies the per-agent path; a bare `setup` without it still succeeds here.
-  if (!cfgPath) { say("Backend is ready. No MCP client-config path given (set REDLIB_MCP_CLIENT_CONFIG or run via the setup skill) — skipping client registration."); return 0; }
+  // No config path (env unset, no --client) -> backend is ready; print a paste-ready entry
+  // instead of a bare "skipping". Render it FROM serverEntry so the printed block can never
+  // drift from what the write path emits. (A Claude Code plugin user's MCP is already wired;
+  // for them this is informational — the setup skill runs this path build-only.)
+  if (!cfgPath) {
+    const e = serverEntry(null, d.version);
+    const entry = `  "redlib-mcp": ${JSON.stringify(e, null, 2).replace(/\n/g, "\n  ")}`;
+    say("Backend is ready. To register the MCP with your client, add this to its mcpServers config:\n");
+    say(entry + "\n");
+    say(`  Claude Code:             claude mcp add redlib-mcp -- ${e.command} ${e.args.join(" ")}`);
+    say("  Codex / Cursor / Gemini: add the block above to the client's MCP config file");
+    say("  (or re-run with REDLIB_MCP_CLIENT_CONFIG=<path> to have setup write it for you)");
+    return 0;
+  }
   const before = existsSync(cfgPath) ? readFileSync(cfgPath, "utf8") : "";
   const entry = serverEntry(null, d.version); // the setup skill may pass an absolute bin; default exact-version npx
   const { text } = mergeServer(before, "redlib-mcp", entry);
