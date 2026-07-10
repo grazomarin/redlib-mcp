@@ -2,7 +2,7 @@
   "mcpServers": {
     "redlib": {
       "command": "npx",
-      "args": ["-y", "redlib-mcp@1.0.1", "serve"]
+      "args": ["-y", "redlib-mcp@1.0.2", "serve"]
     }
   }
 }

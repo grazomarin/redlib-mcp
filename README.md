@@ -38,7 +38,7 @@ tool returns `REDLIB_DOWN`. Run `/reload-plugins` (or start a new session) once 
 # install the setup skill into your agent
 npx skills add grazomarin/redlib-mcp
 # then let your agent run it, or run the CLI directly:
-npx -y redlib-mcp@1.0.1 setup
+npx -y redlib-mcp@1.0.2 setup
 ```
 
 `setup` resolves docker or podman, clones + builds Redlib from source at the pinned reviewed commit,

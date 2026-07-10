@@ -3,7 +3,7 @@
   "name": "io.github.grazomarin/redlib-mcp",
   "title": "redlib-mcp",
   "description": "A private, self-hosted window into public Reddit for your AI agent — no login, no tracking, one command, and it works in Claude Code, Codex, Cursor, and Gemini CLI. Not affiliated with or endorsed by Reddit, Inc.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "repository": {
     "url": "https://github.com/grazomarin/redlib-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "redlib-mcp",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "transport": { "type": "stdio" },
       "packageArguments": [
         { "type": "positional", "value": "serve" }
