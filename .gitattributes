@@ -1,3 +1,10 @@
 # Normalize line endings to LF on checkout everywhere. Without this, git's Windows checkout rewrites
 # LF->CRLF, which broke a frontmatter regex test on the windows CI runner. Fixes that whole class.
 * text=auto eol=lf
+
+# Keep the repo language bar reflecting src/ (TypeScript). These are our files, not
+# vendored, so they stay visible in diffs -- they just don't count toward the stats:
+# test/sample-post.html alone is 190KB, which outweighed all of src/ and made GitHub
+# label the whole project "HTML".
+test/**    -linguist-detectable
+scripts/** -linguist-detectable
