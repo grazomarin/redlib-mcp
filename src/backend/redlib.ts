@@ -14,11 +14,11 @@ export class RedlibBackend implements Backend {
     private fetchImpl: typeof fetchFn = fetchFn,  // injectable so retry/timeout/content-type paths are unit-testable
   ) {}
   async fetch(path: string): Promise<string> {
-    await this.minAcquire();
     const url = `${this.baseUrl}${path}`;
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     let lastErr: any;
     for (let attempt = 0; attempt < 3; attempt++) {
+      await this.minAcquire(); // per attempt: in a shared HTTP server a retry would otherwise jump other clients' queue
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
       try {
