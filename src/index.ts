@@ -178,6 +178,10 @@ async function main() {
         // SDK defaults this protection OFF, so set it explicitly.
         enableDnsRebindingProtection: true,
         allowedHosts: [`127.0.0.1:${PORT}`, `localhost:${PORT}`],
+        // A page on any site can POST here directly with a CORS-safelisted Content-Type (no preflight)
+        // and, with no session to establish, reach the tools. Agents send no Origin, so only browsers
+        // are turned away.
+        allowedOrigins: [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`],
       });
       const server = createServer();
       res.on("close", () => { transport.close(); server.close(); });
