@@ -1,5 +1,6 @@
 import assert from 'node:assert';
 import { spawn } from 'node:child_process';
+import { request } from 'node:http';
 import { createServer } from 'node:net';
 
 // HTTP transport (USE_HTTP=true): one server process must serve several MCP clients at once —
@@ -36,6 +37,13 @@ async function rpc(url, body, { token, method = 'POST', headers = {} } = {}) {
   try { json = JSON.parse(line ? line.slice(6) : text); } catch {}
   return { status: r.status, json };
 }
+// fetch cannot override Host, which the DNS-rebinding check reads.
+const statusWithHost = (url, host, headers, body) => new Promise((res, rej) => {
+  const u = new URL(url);
+  const r = request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { ...headers, Host: host } }, (resp) => { resp.resume(); res(resp.statusCode); });
+  r.on('error', rej);
+  r.end(body);
+});
 const initialize = (name) => ({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name, version: '1' } } });
 const toolsList = (id) => ({ jsonrpc: '2.0', id, method: 'tools/list', params: {} });
 const TOOLS = ['get_post', 'get_subreddit_posts', 'get_user_activity', 'search_reddit'];
@@ -70,6 +78,10 @@ try {
   assert.equal((await call(toolsList(2), { headers: { Authorization: 'Bearer wrong' } })).status, 401, 'wrong bearer must be rejected');
   assert.equal((await rpc(shared.url.replace('/mcp', '/other'), {}, { token: TOKEN })).status, 404, 'only /mcp is served');
   assert.equal((await call(null, { method: 'GET' })).status, 405, 'GET (server-push stream) is not offered');
+  const port = new URL(shared.url).port;
+  const rebinding = await statusWithHost(shared.url, `evil.example:${port}`,
+    { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, JSON.stringify(toolsList(5)));
+  assert.equal(rebinding, 403, 'a DNS-rebinding Host must be rejected even with a valid bearer');
 
   // A web page can POST with a CORS-safelisted Content-Type (no preflight) that still contains
   // "application/json"; without a token, only the Origin check stands between it and the tools.
