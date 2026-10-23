@@ -130,7 +130,7 @@ Everything is read-only and served from your loopback Redlib; the agent never co
 
 The MCP talks only to your own loopback Redlib and never contacts reddit.com directly; it applies a conservative request rate cap.
 
-**HTTP transport (advanced).** By default the server speaks MCP over stdio. Set `USE_HTTP=true` to serve over HTTP on `127.0.0.1` (loopback) at `PORT` (default `3000`); set `REDLIB_MCP_TOKEN` to require a bearer token (recommended — without it the endpoint is unauthenticated). DNS-rebinding protection is on.
+**HTTP transport (advanced).** By default the server speaks MCP over stdio. Set `USE_HTTP=true` to serve over HTTP on `127.0.0.1` (loopback) at `PORT` (default `3000`); set `REDLIB_MCP_TOKEN` to require a bearer token (recommended — without it the endpoint is unauthenticated). DNS-rebinding protection is on. One HTTP server can be shared by any number of clients: each request is handled statelessly, and the request rate cap applies across all of them.
 
 **CLI exit codes** (`setup`/`restart`/`update`/`doctor`): `0` success · `2` bad flag/unknown command · `3` container engine/daemon unreachable · `4` container started but unhealthy · `5` verification failed (build discarded) · `6` verification inconclusive (kept current image).
 
