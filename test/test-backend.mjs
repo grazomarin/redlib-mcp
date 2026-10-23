@@ -38,5 +38,10 @@ await assert.rejects(() => mk(() => { const e = new Error('aborted'); e.name = '
 await assert.rejects(() => mk(() => resp(200, '{}', 'application/json')).fetch('/x'), (e) => e.kind === 'PARSE_ERROR', 'non-HTML content-type -> PARSE_ERROR');
 // ECONNREFUSED -> REDLIB_DOWN (container not up); message must point at the fix
 await assert.rejects(() => mk(() => { const e = new Error('refused'); e.code = 'ECONNREFUSED'; throw e; }).fetch('/x'), (e) => e.kind === 'REDLIB_DOWN' && /redlib-mcp setup/.test(e.message), 'ECONNREFUSED -> REDLIB_DOWN naming `redlib-mcp setup`');
+// every attempt, retries included, must pass the shared rate limiter — a retry may not jump other clients' queue
+let acquires = 0;
+const counted = new RedlibBackend(LOOPBACK, async () => { acquires++; }, 15000, scripted(() => resp(503, 'err'), () => resp(503, 'err'), () => resp(200, '<html>ok</html>')));
+assert.match(await counted.fetch('/x'), /ok/, '503, 503, 200 -> retried to success');
+assert.equal(acquires, 3, `each of the 3 attempts must acquire the limiter, got ${acquires}`);
 
 console.log('ALL PASS');
